@@ -22,6 +22,9 @@
 - [ ] 已配置 `VITE_SUPABASE_ANON_KEY`。
 - [ ] 已配置 `VITE_AMAP_KEY`。
 - [ ] 已配置 `VITE_AMAP_SECURITY_CODE`。
+- [ ] 已配置 `VITE_DATA_MODE=proxy`。
+- [ ] 已配置服务端私密变量 `SUPABASE_URL`。
+- [ ] 已配置服务端私密变量 `SUPABASE_SERVICE_ROLE_KEY`，且没有写入前端代码或 GitHub。
 - [ ] 如启用 Kimi 后端分类，已配置 `VITE_KIMI_CLASSIFY_ENDPOINT`。
 - [ ] `vercel.json` 已存在，并配置 SPA rewrite，避免 `/worker?worker=li` 刷新 404。
 
@@ -34,6 +37,9 @@
 - [ ] 诊断显示已读取 `VITE_SUPABASE_URL`。
 - [ ] 诊断显示已读取 `VITE_SUPABASE_ANON_KEY`。
 - [ ] 诊断显示 Supabase URL 格式正确。
+- [ ] 诊断显示 `/api/diagnose` 可访问。
+- [ ] 诊断显示服务端已读取 `SUPABASE_URL`。
+- [ ] 诊断显示服务端已读取 `SUPABASE_SERVICE_ROLE_KEY`。
 - [ ] 诊断显示 `workers` 可读写。
 - [ ] 诊断显示 `wall_points` 可读写。
 - [ ] 诊断显示 `dispatch_tasks` 可读写。

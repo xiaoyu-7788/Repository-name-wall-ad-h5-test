@@ -14,6 +14,7 @@ vercel --version
 npm install
 npm run build
 npm run test:e2e
+node -e "require all api/*.js"
 ```
 
 环境检查：
@@ -449,3 +450,95 @@ vercel --version
 
 - 这是 Vercel 账号登录/授权问题，需要人工在本机 CLI 中完成。
 - 不要把 Vercel token 或任何真实环境变量发到聊天里。
+
+## 15. Vercel API 代理模式改造
+
+更新时间：2026-05-07。
+
+修改文件：
+
+- `.env.example`
+- `README.md`
+- `DEPLOY_CHECKLIST.md`
+- `DEPLOY_RESULT.md`
+- `TEST_REPORT.md`
+- `vercel.json`
+- `src/App.jsx`
+- `src/supabaseClient.js`
+- `tests/e2e/app.spec.js`
+
+新增文件：
+
+- `src/apiClient.js`
+- `api/_shared.js`
+- `api/diagnose.js`
+- `api/seed-demo.js`
+- `api/points.js`
+- `api/workers.js`
+- `api/dispatch.js`
+- `api/worker-tasks.js`
+- `api/upload.js`
+- `api/photos.js`
+
+改造结果：
+
+- 保留本地演示模式。
+- 保留前端 Supabase 直连备用模式。
+- 新增 `VITE_DATA_MODE=proxy` 代理模式，并作为线上推荐模式。
+- 前端代理模式下优先请求本站 `/api/*`。
+- Vercel Serverless Function 使用 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY` 访问 Supabase。
+- `SUPABASE_SERVICE_ROLE_KEY` 没有写入前端代码、文档真实值或报告真实值。
+- 后台 Supabase 诊断已拆成两组：前端直连 Supabase、Vercel API 代理。
+- 如果前端直连失败但代理成功，页面会提示“浏览器无法直连 Supabase，但 Vercel 代理连接成功，系统可正常使用。”
+
+新增 API：
+
+- `GET /api/diagnose`：检查服务端环境变量、4 张表、`point-media` bucket。
+- `POST /api/seed-demo`：写入或重置演示 workers 和 wall_points。
+- `GET /api/points`：返回 points、tasks、photos、workers 状态。
+- `POST /api/points`：新增或更新点位。
+- `PATCH /api/points`：更新点位或批量改项目名。
+- `GET /api/workers`：返回 workers 列表。
+- `POST /api/dispatch`：写入 dispatch_tasks，并把点位状态更新为“施工中”。
+- `GET /api/worker-tasks`：按 worker code/id 返回师傅任务。
+- `POST /api/upload`：支持 base64 JSON 上传，写 Storage、point_photos，并把点位和派单状态更新为“已完成”。
+- `PATCH /api/photos`：更新照片分类。
+
+执行过的命令：
+
+```bash
+npm install
+npm run build
+npm run test:e2e
+```
+
+测试结果：
+
+- `npm install`：通过；npm 仍提示 1 个 high severity audit 项，建议后续单独评估。
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，9 passed。
+- API 文件加载检查：通过，`api/_shared.js`、`api/diagnose.js`、`api/seed-demo.js`、`api/points.js`、`api/workers.js`、`api/dispatch.js`、`api/worker-tasks.js`、`api/upload.js`、`api/photos.js` 均可被 Node 正常加载。
+
+新增测试覆盖：
+
+- `/api/diagnose` 未配置服务端变量时不崩溃。
+- 本地演示模式仍可派单、显示移动端任务、上传后自动完成。
+- Supabase 诊断页面显示前端直连和 Vercel API 代理两组状态。
+
+Vercel 需要新增或确认的变量：
+
+前端公开变量：
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_AMAP_KEY`
+- `VITE_AMAP_SECURITY_CODE`
+- `VITE_DATA_MODE=proxy`
+- `VITE_KIMI_CLASSIFY_ENDPOINT`，可选
+
+服务端私密变量：
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+`SUPABASE_SERVICE_ROLE_KEY` 在 Supabase Project Settings -> API 中查看，只允许填到 Vercel Environment Variables，只允许 Serverless API 读取。

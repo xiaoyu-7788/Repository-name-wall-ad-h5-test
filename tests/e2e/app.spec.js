@@ -1,10 +1,41 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
+const diagnoseHandler = require("../../api/diagnose.js");
 
 const STORE_KEY = "wall-ad-h5-demo-state";
 const fixtureDir = path.join(__dirname, "..", "fixtures");
 const fixturePath = path.join(fixtureDir, "test-wall.jpg");
+
+function invokeApi(handler, { method = "GET", query = {}, body = undefined } = {}) {
+  return new Promise((resolve) => {
+    const req = { method, query, body };
+    const res = {
+      statusCode: 200,
+      headers: {},
+      setHeader(name, value) {
+        this.headers[name] = value;
+      },
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload) {
+        resolve({ status: this.statusCode, body: payload, headers: this.headers });
+      },
+      end(payload) {
+        let body = payload;
+        try {
+          body = payload ? JSON.parse(payload) : {};
+        } catch {
+          body = payload;
+        }
+        resolve({ status: this.statusCode, body, headers: this.headers });
+      },
+    };
+    Promise.resolve(handler(req, res)).catch((error) => resolve({ status: 500, body: { ok: false, detail: error.message } }));
+  });
+}
 
 async function openAdmin(page) {
   await page.goto("/");
@@ -130,13 +161,28 @@ test.describe("墙体广告执行 H5 派单系统", () => {
     await expect(page.locator(".env-grid").getByText("VITE_SUPABASE_URL", { exact: true })).toBeVisible();
     await expect(page.locator(".env-grid").getByText("VITE_SUPABASE_ANON_KEY", { exact: true })).toBeVisible();
     await expect(page.locator(".env-grid").getByText("URL 格式", { exact: true })).toBeVisible();
-    await expect(page.getByText("workers 表读取")).toBeVisible();
-    await expect(page.getByText("wall_points 表读取")).toBeVisible();
-    await expect(page.getByText("dispatch_tasks 表读取")).toBeVisible();
-    await expect(page.getByText("point_photos 表读取")).toBeVisible();
+    await expect(page.locator(".env-grid").getByText("VITE_DATA_MODE", { exact: true })).toBeVisible();
+    await expect(page.getByText("前端直连 Supabase")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Vercel API 代理" })).toBeVisible();
+    await expect(page.getByText(/浏览器访问 Supabase|Vercel API 代理 -/).first()).toBeVisible();
     await expect(page.getByText(/point-media/).first()).toBeVisible();
 
     const unconfigured = await page.getByText(/Supabase 未配置|未读取|未配置/).count();
     expect(unconfigured).toBeGreaterThan(0);
+  });
+
+  test("测试 9：/api/diagnose 未配置时不崩溃", async () => {
+    const oldUrl = process.env.SUPABASE_URL;
+    const oldKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const response = await invokeApi(diagnoseHandler);
+    if (oldUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = oldUrl;
+    if (oldKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = oldKey;
+
+    expect(response.status).toBe(200);
+    expect(response.body.ok).toBe(false);
+    expect(response.body.checks.some((check) => check.name === "SUPABASE_URL")).toBeTruthy();
+    expect(response.body.checks.some((check) => check.name === "SUPABASE_SERVICE_ROLE_KEY")).toBeTruthy();
   });
 });

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { supabase, isSupabaseConfigured, supabaseEnv } from "./supabaseClient";
+import { getDataModeLabel, isLocalDataMode, isProxyDataMode, proxyApi } from "./apiClient";
 import "./styles.css";
 
 const STATUS = ["待施工", "施工中", "已完成", "需复查"];
@@ -93,6 +94,9 @@ function mediaMatchesKind(photo, kind) {
 }
 
 function classifySupabaseError(error) {
+  if (error?.category || error?.detail) {
+    return { category: error.category || "代理失败", detail: error.detail || error.message || "Vercel API 代理请求失败。" };
+  }
   const message = `${error?.message || error?.error_description || error || ""}`;
   const lowered = message.toLowerCase();
   const code = String(error?.code || error?.statusCode || error?.status || "");
@@ -137,115 +141,52 @@ async function readResult(name, promiseFactory) {
 }
 
 async function runSupabaseDiagnostics() {
-  const steps = [];
   const startedAt = cnTime();
+  const directSteps = [
+    makeStep("读取 VITE_SUPABASE_URL", supabaseEnv.hasUrl, supabaseEnv.hasUrl ? "通过" : "未配置 .env", supabaseEnv.hasUrl ? "前端已读取公开 URL" : "未读取到 VITE_SUPABASE_URL"),
+    makeStep("读取 VITE_SUPABASE_ANON_KEY", supabaseEnv.hasAnonKey, supabaseEnv.hasAnonKey ? "通过" : "未配置 .env", supabaseEnv.hasAnonKey ? "前端已读取公开 anon key" : "未读取到 VITE_SUPABASE_ANON_KEY"),
+    makeStep("Supabase URL 格式", supabaseEnv.urlValidation.ok, supabaseEnv.urlValidation.ok ? "通过" : "URL 格式错误", supabaseEnv.urlValidation.reason),
+  ];
 
-  steps.push(makeStep("读取 VITE_SUPABASE_URL", supabaseEnv.hasUrl, supabaseEnv.hasUrl ? "通过" : "环境变量错误", supabaseEnv.hasUrl ? `已读取：${supabaseEnv.maskedUrl}` : "未读取到 VITE_SUPABASE_URL"));
-  steps.push(makeStep("读取 VITE_SUPABASE_ANON_KEY", supabaseEnv.hasAnonKey, supabaseEnv.hasAnonKey ? "通过" : "环境变量错误", supabaseEnv.hasAnonKey ? `已读取：${supabaseEnv.maskedAnonKey}` : "未读取到 VITE_SUPABASE_ANON_KEY"));
-  steps.push(makeStep("Supabase URL 格式", supabaseEnv.urlValidation.ok, supabaseEnv.urlValidation.ok ? "通过" : "环境变量错误", supabaseEnv.urlValidation.reason));
-
-  if (!supabase) {
-    TABLE_NAMES.forEach((table) => {
-      steps.push(makeStep(`${table} 表读取`, false, "未配置", "Supabase 未配置，暂未执行表读取检测。"));
-      steps.push(makeStep(`${table} 表写入`, false, "未配置", "Supabase 未配置，暂未执行表写入检测。"));
-    });
-    steps.push(makeStep(`Storage ${STORAGE_BUCKET} 读取`, false, "未配置", "Supabase 未配置，暂未执行 Storage bucket 读取检测。"));
-    steps.push(makeStep(`Storage ${STORAGE_BUCKET} 写入`, false, "未配置", "Supabase 未配置，暂未执行 Storage bucket 写入检测。"));
-    return { ok: false, startedAt, finishedAt: cnTime(), steps };
-  }
-
-  for (const table of TABLE_NAMES) {
-    steps.push(await readResult(`${table} 表读取`, () => supabase.from(table).select("id", { count: "exact", head: true })));
-  }
-
-  const diagId = uid("diag");
-  const workerId = `diag_worker_${diagId}`;
-  const pointId = `diag_point_${diagId}`;
-  const taskId = `diag_task_${diagId}`;
-  const photoId = `diag_photo_${diagId}`;
-  const storagePath = `diagnostics/${diagId}.txt`;
-
-  let workerOk = false;
-  let pointOk = false;
-  let taskOk = false;
-  let photoOk = false;
-  let storageUploadOk = false;
-
-  const workerStep = await readResult("workers 表写入", () => supabase.from("workers").upsert({
-    id: workerId,
-    code: workerId,
-    name: "连接诊断师傅",
-    phone: "00000000000",
-    car_no: "DIAG",
-    created_at: nowIso(),
-  }).select("id").single());
-  workerOk = workerStep.ok;
-  steps.push(workerStep);
-
-  const pointStep = await readResult("wall_points 表写入", () => supabase.from("wall_points").upsert({
-    id: pointId,
-    title: "DIAG-POINT",
-    address: "连接诊断临时点位",
-    landlord_name: "诊断",
-    landlord_phone: "00000000000",
-    k_code: "K-DIAG",
-    project_name: "连接诊断项目",
-    status: "待施工",
-    lng: 113.2644,
-    lat: 23.1291,
-    created_at: nowIso(),
-  }).select("id").single());
-  pointOk = pointStep.ok;
-  steps.push(pointStep);
-
-  if (workerOk && pointOk) {
-    const taskStep = await readResult("dispatch_tasks 表写入", () => supabase.from("dispatch_tasks").insert({
-      id: taskId,
-      worker_id: workerId,
-      point_id: pointId,
-      status: "已派发",
-      created_at: nowIso(),
-    }).select("id").single());
-    taskOk = taskStep.ok;
-    steps.push(taskStep);
-
-    const photoStep = await readResult("point_photos 表写入", () => supabase.from("point_photos").insert({
-      id: photoId,
-      point_id: pointId,
-      worker_id: workerId,
-      url: "https://example.com/diagnostic.jpg",
-      file_name: "diagnostic.jpg",
-      kind: "连接诊断",
-      created_at: nowIso(),
-    }).select("id").single());
-    photoOk = photoStep.ok;
-    steps.push(photoStep);
+  if (supabase && supabaseEnv.urlValidation.ok) {
+    directSteps.push(await readResult("浏览器访问 Supabase workers", () => supabase.from("workers").select("id", { count: "exact", head: true })));
   } else {
-    steps.push(makeStep("dispatch_tasks 表写入", false, "前置表写入失败", "workers 或 wall_points 写入未通过，无法检测外键表写入。"));
-    steps.push(makeStep("point_photos 表写入", false, "前置表写入失败", "workers 或 wall_points 写入未通过，无法检测外键表写入。"));
+    directSteps.push(makeStep("浏览器访问 Supabase", false, "未配置 .env", "前端直连未启用，跳过浏览器访问检测。"));
   }
 
-  const storageListStep = await readResult(`Storage ${STORAGE_BUCKET} 读取`, () => supabase.storage.from(STORAGE_BUCKET).list("diagnostics", { limit: 1 }));
-  steps.push(storageListStep);
-
-  const storageUploadStep = await readResult(`Storage ${STORAGE_BUCKET} 写入`, () => supabase.storage.from(STORAGE_BUCKET).upload(
-    storagePath,
-    new Blob(["wall-ad-h5 diagnostic"], { type: "text/plain" }),
-    { cacheControl: "60", upsert: true },
-  ));
-  storageUploadOk = storageUploadStep.ok;
-  steps.push(storageUploadStep);
-
-  await supabase.from("point_photos").delete().eq("id", photoId);
-  await supabase.from("dispatch_tasks").delete().eq("id", taskId);
-  await supabase.from("wall_points").delete().eq("id", pointId);
-  await supabase.from("workers").delete().eq("id", workerId);
-  if (storageUploadOk) {
-    await supabase.storage.from(STORAGE_BUCKET).remove([storagePath]);
+  let proxySteps = [];
+  try {
+    const proxy = await proxyApi.diagnose();
+    proxySteps = (proxy.checks || []).map((step) => makeStep(`Vercel API 代理 - ${step.name}`, step.ok, step.category, step.detail));
+  } catch (err) {
+    const issue = classifySupabaseError(err);
+    proxySteps = [makeStep("Vercel API 代理 - /api/diagnose", false, issue.category, issue.detail)];
   }
 
-  const writeOk = workerOk && pointOk && taskOk && photoOk && storageUploadOk;
-  return { ok: steps.every((step) => step.ok) && writeOk, startedAt, finishedAt: cnTime(), steps };
+  const directOk = directSteps.every((step) => step.ok);
+  const proxyOk = proxySteps.length > 0 && proxySteps.every((step) => step.ok);
+  let summary = "";
+  if (!directOk && proxyOk) {
+    summary = "浏览器无法直连 Supabase，但 Vercel 代理连接成功，系统可正常使用。";
+  } else if (proxyOk) {
+    summary = "Vercel API 代理连接成功，系统将优先使用代理模式。";
+  } else if (directOk) {
+    summary = "前端直连 Supabase 可用；代理不可用时可作为备用模式。";
+  } else {
+    summary = "前端直连和 Vercel API 代理均未通过，请优先检查 Vercel 服务端环境变量和网络。";
+  }
+
+  return {
+    ok: proxyOk || directOk,
+    directOk,
+    proxyOk,
+    summary,
+    startedAt,
+    finishedAt: cnTime(),
+    directSteps,
+    proxySteps,
+    steps: [...directSteps, ...proxySteps],
+  };
 }
 
 async function geocodeAddress(address) {
@@ -428,7 +369,7 @@ function useH5Data() {
   }
 
   useEffect(() => {
-    if (isSupabaseConfigured) return undefined;
+    if (!isLocalDataMode) return undefined;
     const syncFromLocal = (event) => {
       if (event.type === "storage" && event.key && event.key !== LOCAL_STORE_KEY) return;
       const next = readLocalDemoState();
@@ -446,7 +387,7 @@ function useH5Data() {
   }, []);
 
   async function loadAll() {
-    if (!isSupabaseConfigured) {
+    if (isLocalDataMode) {
       const next = readLocalDemoState();
       setWorkers(next.workers);
       setPoints(next.points);
@@ -457,6 +398,15 @@ function useH5Data() {
     }
     setLoading(true);
     try {
+      if (isProxyDataMode) {
+        const state = await proxyApi.loadState();
+        setWorkers(state.workers || []);
+        setPoints(state.points || []);
+        setTasks(state.tasks || []);
+        setPhotos(state.photos || []);
+        setMessage(`已通过 Vercel API 代理读取 Supabase 数据（${cnTime()}）。`);
+        return;
+      }
       const [{ data: w, error: ew }, { data: p, error: ep }, { data: t, error: et }, { data: ph, error: eph }] =
         await Promise.all([
           supabase.from("workers").select("*").order("name"),
@@ -480,13 +430,22 @@ function useH5Data() {
   }
 
   async function seedDemoData() {
-    if (!isSupabaseConfigured) {
+    if (isLocalDataMode) {
       applyLocalState(createDemoState());
       setMessage("已重置本地演示数据。你可以直接在后台派单，再打开师傅移动端测试。");
       return;
     }
     setLoading(true);
     try {
+      if (isProxyDataMode) {
+        const state = await proxyApi.seedDemo();
+        setWorkers(state.workers || []);
+        setPoints(state.points || []);
+        setTasks(state.tasks || []);
+        setPhotos(state.photos || []);
+        setMessage("已通过 Vercel API 代理写入演示师傅和点位。");
+        return;
+      }
       await supabase.from("workers").upsert(demoWorkers, { onConflict: "id" });
       await supabase.from("wall_points").upsert(demoPoints.map(serializePointForDb), { onConflict: "id" });
       await loadAll();
@@ -502,13 +461,19 @@ function useH5Data() {
   async function addPoints(newPoints) {
     const payload = newPoints.map(serializePointForDb);
     if (!payload.length) return;
-    if (!isSupabaseConfigured) {
+    if (isLocalDataMode) {
       applyLocalState((current) => ({ ...current, points: [...payload, ...current.points] }));
       setMessage(`本地演示：已新增 ${payload.length} 个点位。`);
       return;
     }
     setLoading(true);
     try {
+      if (isProxyDataMode) {
+        await proxyApi.addPoints(payload);
+        await loadAll();
+        setMessage(`已通过 Vercel API 代理写入 ${payload.length} 个点位。`);
+        return;
+      }
       const { error } = await supabase.from("wall_points").upsert(payload, { onConflict: "id" });
       if (error) throw error;
       await loadAll();
@@ -526,7 +491,7 @@ function useH5Data() {
     delete payload.created_at;
     payload.updated_at = nowIso();
     if (payload.status !== "已完成") payload.completed_at = null;
-    if (!isSupabaseConfigured) {
+    if (isLocalDataMode) {
       applyLocalState((current) => ({
         ...current,
         points: current.points.map((point) => (point.id === pointId ? { ...point, ...payload } : point)),
@@ -536,6 +501,12 @@ function useH5Data() {
     }
     setLoading(true);
     try {
+      if (isProxyDataMode) {
+        await proxyApi.updatePoint(pointId, payload);
+        await loadAll();
+        setMessage("点位已通过 Vercel API 代理更新。");
+        return;
+      }
       const { error } = await supabase.from("wall_points").update(payload).eq("id", pointId);
       if (error) throw error;
       await loadAll();
@@ -551,7 +522,7 @@ function useH5Data() {
   async function renameProject(oldName, nextName) {
     const cleanName = normalizeText(nextName);
     if (!oldName || !cleanName) return;
-    if (!isSupabaseConfigured) {
+    if (isLocalDataMode) {
       applyLocalState((current) => ({
         ...current,
         points: current.points.map((point) => (getProjectName(point) === oldName ? { ...point, project_name: cleanName, updated_at: nowIso() } : point)),
@@ -561,6 +532,12 @@ function useH5Data() {
     }
     setLoading(true);
     try {
+      if (isProxyDataMode) {
+        await proxyApi.renameProject(oldName, cleanName);
+        await loadAll();
+        setMessage(`项目已通过 Vercel API 代理改名为 ${cleanName}。`);
+        return;
+      }
       const { error } = await supabase.from("wall_points").update({ project_name: cleanName, updated_at: nowIso() }).eq("project_name", oldName);
       if (error) throw error;
       await loadAll();
@@ -591,7 +568,7 @@ function useH5Data() {
       return;
     }
 
-    if (!isSupabaseConfigured) {
+    if (isLocalDataMode) {
       applyLocalState((current) => {
         const currentKeys = new Set(current.tasks.map((task) => `${task.worker_id}:${task.point_id}`));
         const newTasks = payload.filter((task) => !currentKeys.has(`${task.worker_id}:${task.point_id}`));
@@ -612,6 +589,12 @@ function useH5Data() {
 
     setLoading(true);
     try {
+      if (isProxyDataMode) {
+        await proxyApi.dispatch(workerId, selectedIds);
+        await loadAll();
+        setMessage("已通过 Vercel API 代理写入 dispatch_tasks，并派单到指定师傅移动端。");
+        return;
+      }
       const { error } = await supabase.from("dispatch_tasks").insert(payload);
       if (error) throw error;
       const { error: updateError } = await supabase
@@ -632,11 +615,21 @@ function useH5Data() {
 
   async function updatePointStatus(pointId, nextStatus) {
     const changes = { status: nextStatus, updated_at: nowIso(), completed_at: nextStatus === "已完成" ? nowIso() : null };
-    if (!isSupabaseConfigured) {
+    if (isLocalDataMode) {
       applyLocalState((current) => ({
         ...current,
         points: current.points.map((p) => (p.id === pointId ? { ...p, ...changes } : p)),
       }));
+      return;
+    }
+    if (isProxyDataMode) {
+      try {
+        await proxyApi.updatePoint(pointId, changes);
+      } catch (error) {
+        const issue = classifySupabaseError(error);
+        setMessage(`更新状态失败：${issue.category}。${issue.detail}`);
+      }
+      await loadAll();
       return;
     }
     const { error } = await supabase.from("wall_points").update(changes).eq("id", pointId);
@@ -648,12 +641,23 @@ function useH5Data() {
   }
 
   async function updatePhotoKind(photoId, nextKind) {
-    if (!isSupabaseConfigured) {
+    if (isLocalDataMode) {
       applyLocalState((current) => ({
         ...current,
         photos: current.photos.map((photo) => (photo.id === photoId ? { ...photo, kind: nextKind } : photo)),
       }));
       setMessage(`本地演示：图片已分类为 ${nextKind}。`);
+      return;
+    }
+    if (isProxyDataMode) {
+      try {
+        await proxyApi.updatePhotoKind(photoId, nextKind);
+        await loadAll();
+        setMessage(`图片已通过 Vercel API 代理分类为 ${nextKind}。`);
+      } catch (error) {
+        const issue = classifySupabaseError(error);
+        setMessage(`图片分类写入失败：${issue.category}。${issue.detail}`);
+      }
       return;
     }
     const { error } = await supabase.from("point_photos").update({ kind: nextKind }).eq("id", photoId);
@@ -672,6 +676,10 @@ function useH5Data() {
     const kind = getMediaKind(file);
 
     let publicUrl = "";
+    if (isProxyDataMode) {
+      const result = await proxyApi.upload({ file, point, worker, kind });
+      return result.url || result.publicUrl || "";
+    }
     if (isSupabaseConfigured) {
       const { error: uploadError } = await supabase.storage.from(STORAGE_BUCKET).upload(path, file, {
         cacheControl: "3600",
@@ -784,7 +792,7 @@ function DiagnosticPanel({ compact = false }) {
       <div className="section-head">
         <div>
           <h2>Supabase 连接诊断</h2>
-          <p>{result ? `最近检测：${result.finishedAt}` : "检测环境变量、表读写、RLS 和 Storage bucket。"}</p>
+          <p>{result ? `最近检测：${result.finishedAt}` : "检测前端直连和 Vercel API 代理连接状态。"}</p>
         </div>
         <button className="primary" onClick={run} disabled={running}>{running ? "检测中..." : "开始诊断"}</button>
       </div>
@@ -793,14 +801,25 @@ function DiagnosticPanel({ compact = false }) {
         <div><span>VITE_SUPABASE_URL</span><b>{supabaseEnv.hasUrl ? "已读取" : "未读取"}</b><small>{supabaseEnv.maskedUrl || supabaseEnv.urlValidation.reason}</small></div>
         <div><span>VITE_SUPABASE_ANON_KEY</span><b>{supabaseEnv.hasAnonKey ? "已读取" : "未读取"}</b><small>{supabaseEnv.maskedAnonKey || "请填写 anon key"}</small></div>
         <div><span>URL 格式</span><b>{supabaseEnv.urlValidation.ok ? "正确" : "异常"}</b><small>{supabaseEnv.urlValidation.reason}</small></div>
-        <div><span>Storage bucket</span><b>{STORAGE_BUCKET}</b><small>诊断会检测读取和上传</small></div>
+        <div><span>VITE_DATA_MODE</span><b>{supabaseEnv.dataMode || "未配置"}</b><small>{getDataModeLabel()}</small></div>
+        <div><span>Storage bucket</span><b>{STORAGE_BUCKET}</b><small>代理诊断会检测 bucket 是否存在</small></div>
       </div>
 
-      {!isSupabaseConfigured && <div className="warn">Supabase 未配置：请填写 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY 后重启 dev server。</div>}
+      {isLocalDataMode && <div className="warn">当前是本地演示模式；部署真实测试建议在 Vercel 设置 VITE_DATA_MODE=proxy。</div>}
+      {result?.summary && <div className={result.proxyOk ? "info" : "warn"}>{result.summary}</div>}
 
       {result && (
         <div className="diag-steps">
-          {result.steps.map((step) => (
+          <h3>前端直连 Supabase</h3>
+          {result.directSteps.map((step) => (
+            <div key={step.name} className={`diag-step ${step.ok ? "pass" : "fail"}`}>
+              <b>{step.ok ? "通过" : step.category}</b>
+              <span>{step.name}</span>
+              <small>{step.detail}</small>
+            </div>
+          ))}
+          <h3>Vercel API 代理</h3>
+          {result.proxySteps.map((step) => (
             <div key={step.name} className={`diag-step ${step.ok ? "pass" : "fail"}`}>
               <b>{step.ok ? "通过" : step.category}</b>
               <span>{step.name}</span>
@@ -958,7 +977,7 @@ function AdminPage({ data }) {
       <aside className="side-nav">
         <div className="brand-block">
           <b>墙体广告执行台</b>
-          <span>{isSupabaseConfigured ? "Supabase 在线模式" : "本地演示模式"}</span>
+          <span>{getDataModeLabel()}</span>
         </div>
         <nav>
           {ADMIN_TABS.map((tab) => (
@@ -974,11 +993,11 @@ function AdminPage({ data }) {
           <div>
             <strong className="system-title">全国墙体广告执行派单系统</strong>
             <h1>{ADMIN_TABS.find((tab) => tab.id === activeTab)?.label || "后台"}</h1>
-            <p>{isSupabaseConfigured ? `Supabase URL：${supabaseEnv.maskedUrl}` : "未配置 Supabase，当前数据保存在本机浏览器。"}</p>
+            <p>{isProxyDataMode ? "当前优先通过本站 /api/* 代理访问 Supabase。" : isSupabaseConfigured ? `Supabase URL：${supabaseEnv.maskedUrl}` : "当前数据保存在本机浏览器。"}</p>
           </div>
           <div className="top-actions">
             <button onClick={loadAll} disabled={loading}>刷新数据</button>
-            <button onClick={seedDemoData} disabled={loading}>{isSupabaseConfigured ? "写入演示数据" : "重置本地演示数据"}</button>
+            <button onClick={seedDemoData} disabled={loading}>{isLocalDataMode ? "重置本地演示数据" : "写入演示数据"}</button>
           </div>
         </header>
 
@@ -1535,7 +1554,7 @@ function WorkerPage({ data, workerCode }) {
         <p>{worker.car_no} / {worker.phone}</p>
       </header>
 
-      {!isSupabaseConfigured && <section className="warn">当前是本地演示模式。跨设备测试请配置 Supabase。</section>}
+      {isLocalDataMode && <section className="warn">当前是本地演示模式。跨设备测试请配置 Vercel API 代理或 Supabase 直连。</section>}
       {(message || localMessage) && <section className="info">{localMessage || message}</section>}
 
       <section className="progress">

@@ -42,16 +42,51 @@ cp .env.example .env
 填写：
 
 ```env
-VITE_SUPABASE_URL=https://你的项目.supabase.co
-VITE_SUPABASE_ANON_KEY=你的 anon key
-VITE_AMAP_KEY=你的高德 JS API Key
-VITE_AMAP_SECURITY_CODE=你的高德安全密钥
-VITE_KIMI_CLASSIFY_ENDPOINT=你的后端Kimi图片分类接口，可选
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+VITE_AMAP_KEY=
+VITE_AMAP_SECURITY_CODE=
+VITE_KIMI_CLASSIFY_ENDPOINT=
+VITE_DATA_MODE=proxy
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
 ```
 
 高德导航链接不需要把密钥写进代码。地址自动匹配经纬度会读取 `VITE_AMAP_KEY` 调用高德地理编码。
 
 Kimi 图片分类不要把真实 Kimi API Key 放到前端；请放在后端接口里，然后把后端接口地址填到 `VITE_KIMI_CLASSIFY_ENDPOINT`。未配置时，系统会使用本地文件名规则分类。
+
+### Vercel API 代理模式
+
+线上真实手机测试建议使用代理模式：
+
+```env
+VITE_DATA_MODE=proxy
+```
+
+此时浏览器前端会优先请求本站 `/api/*`，再由 Vercel Serverless Function 访问 Supabase。这样即使手机或浏览器无法直连 Supabase，系统仍可通过 Vercel 后端代理工作。
+
+Vercel 需要配置两类环境变量：
+
+前端公开变量：
+
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+VITE_AMAP_KEY
+VITE_AMAP_SECURITY_CODE
+VITE_DATA_MODE=proxy
+VITE_KIMI_CLASSIFY_ENDPOINT，可选
+```
+
+服务端私密变量：
+
+```text
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` 在 Supabase Project Settings → API 里查看。这个 key 权限很高，绝对不能写到前端代码、README、报告、`.env.example` 的真实值、GitHub 仓库或聊天里，只允许填到 Vercel Project → Settings → Environment Variables，并且只允许 `/api/*` Serverless Function 读取。
 
 ---
 
@@ -125,6 +160,9 @@ VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
 VITE_AMAP_KEY
 VITE_AMAP_SECURITY_CODE
+VITE_DATA_MODE=proxy
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
 ```
 
 可选：

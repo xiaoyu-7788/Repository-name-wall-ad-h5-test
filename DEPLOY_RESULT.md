@@ -5,10 +5,10 @@
 ## 当前部署状态
 
 - GitHub：已连接远程私有仓库，并已推送 `main` 分支。
-- Vercel：未连接；当前 PowerShell 能找到 Vercel CLI，但 CLI 没有有效登录凭据。
-- Vercel 环境变量：未能自动检查；需要在 Vercel 项目后台人工配置。
-- 预览环境：未部署。
-- 生产环境：未部署。
+- Vercel：用户已完成网页部署；当前改造为 Vercel API 代理模式，待重新部署。
+- Vercel 环境变量：需要新增服务端私密变量后重新部署。
+- 预览环境：需重新部署代理版本。
+- 生产环境：需重新部署代理版本。
 
 ## 本地已完成
 
@@ -23,18 +23,54 @@
 - `npm run build`：通过。
 - `npm run test:e2e`：通过，8 passed。
 - `npm run test:supabase`：失败，原因是当前机器网络无法访问 Supabase REST/Storage endpoint；未写入测试数据。
+- 已新增 Vercel API 代理路由，浏览器可优先请求本站 `/api/*`，由 Vercel Serverless Function 访问 Supabase。
+- 已保留本地演示模式和前端 Supabase 直连备用模式。
+- `npm install`：通过。
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，9 passed。
 
 ## 访问地址
 
-当前尚未部署，因此暂无真实访问地址。
+代理版本需要重新部署后生效。
 
-- 后台访问地址：待 Vercel 部署后生成。
-- 张师傅移动端地址：待 Vercel 部署后为 `https://你的部署域名/worker?worker=zhang`。
-- 李师傅移动端地址：待 Vercel 部署后为 `https://你的部署域名/worker?worker=li`。
+- 后台访问地址：`https://你的部署域名/`。
+- 张师傅移动端地址：`https://你的部署域名/worker?worker=zhang`。
+- 李师傅移动端地址：`https://你的部署域名/worker?worker=li`。
+
+## Vercel API 代理模式
+
+新增 API：
+
+- `GET /api/diagnose`
+- `POST /api/seed-demo`
+- `GET|POST|PATCH /api/points`
+- `GET /api/workers`
+- `POST /api/dispatch`
+- `GET /api/worker-tasks`
+- `POST /api/upload`
+- `PATCH /api/photos`
+
+Vercel 需要配置：
+
+前端公开变量：
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_AMAP_KEY`
+- `VITE_AMAP_SECURITY_CODE`
+- `VITE_DATA_MODE=proxy`
+- `VITE_KIMI_CLASSIFY_ENDPOINT`，可选
+
+服务端私密变量：
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+`SUPABASE_SERVICE_ROLE_KEY` 只能填在 Vercel Environment Variables，不要写进前端代码、GitHub、README、报告或聊天。
 
 ## 卡住的位置
 
-自动部署卡在 Vercel CLI 阶段：
+历史自动部署曾卡在 Vercel CLI 阶段：
 
 - 执行 `vercel --version` 失败。
 - 当前机器找不到 `vercel` 命令。

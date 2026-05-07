@@ -5,6 +5,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const amapKey = import.meta.env.VITE_AMAP_KEY;
 const amapSecurityCode = import.meta.env.VITE_AMAP_SECURITY_CODE;
 const kimiClassifyEndpoint = import.meta.env.VITE_KIMI_CLASSIFY_ENDPOINT;
+const dataMode = String(import.meta.env.VITE_DATA_MODE || "").toLowerCase();
 const forceLocalDemo = import.meta.env.VITE_FORCE_LOCAL_DEMO === "true";
 
 function maskValue(value) {
@@ -42,12 +43,14 @@ export const supabaseEnv = {
   amapKey: amapKey || "",
   amapSecurityCode: amapSecurityCode || "",
   kimiClassifyEndpoint: kimiClassifyEndpoint || "",
+  dataMode,
   hasUrl: Boolean(supabaseUrl),
   hasAnonKey: Boolean(supabaseAnonKey),
   hasAmapKey: Boolean(amapKey),
   hasAmapSecurityCode: Boolean(amapSecurityCode),
   hasKimiClassifyEndpoint: Boolean(kimiClassifyEndpoint),
   forceLocalDemo,
+  isProxyMode: !forceLocalDemo && dataMode === "proxy",
   maskedUrl: maskValue(supabaseUrl || ""),
   maskedAnonKey: maskValue(supabaseAnonKey || ""),
   maskedAmapKey: maskValue(amapKey || ""),
