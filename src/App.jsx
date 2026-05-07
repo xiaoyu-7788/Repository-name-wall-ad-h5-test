@@ -618,6 +618,8 @@ function useH5Data() {
           payload: requestPayload,
           stage: err.stage || err.data?.stage || "",
           message: err.message || err.data?.message || issue.category,
+          error_name: err.data?.error_name || "",
+          error_message: err.data?.error_message || "",
           details: err.details || err.data?.details || issue.detail,
           status: err.status || "",
           response: err.data || null,

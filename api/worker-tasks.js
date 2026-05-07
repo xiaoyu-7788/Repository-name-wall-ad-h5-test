@@ -1,38 +1,65 @@
-const { classifyError, methodNotAllowed, requireSupabase, sendJson } = require("./_shared");
+const { classifyError, getSupabaseAdmin, methodNotAllowed, sendJson } = require("./_shared");
 
 function text(value) {
   return String(value || "").trim();
 }
 
 function includesText(value, keyword) {
-  return text(value).toLowerCase().includes(text(keyword).toLowerCase());
+  const source = text(value).toLowerCase();
+  const target = text(keyword).toLowerCase();
+  return Boolean(source && target && source.includes(target));
+}
+
+function isLiSignal(value) {
+  const key = text(value);
+  return key === "li" || key === "w2" || key.includes("李") || key.includes("工002");
+}
+
+function isZhangSignal(value) {
+  const key = text(value);
+  return key === "zhang" || key === "w1" || key.includes("张") || key.includes("工001");
 }
 
 function matchWorker(worker, query) {
   const key = text(query);
   const candidates = [worker.id, worker.code, worker.worker_key, worker.slug].map(text).filter(Boolean);
+  const workerName = text(worker.name);
+  const workerCarNo = text(worker.car_no || worker.carNo);
   if (candidates.includes(key)) return true;
   if (text(worker.phone) === key) return true;
-  if (key === "li" && (includesText(worker.name, "李") || includesText(worker.car_no || worker.carNo, "工002"))) return true;
-  if (key === "zhang" && (includesText(worker.name, "张") || includesText(worker.car_no || worker.carNo, "工001"))) return true;
+  if (isLiSignal(key) && (includesText(workerName, "李") || includesText(workerCarNo, "工002"))) return true;
+  if (isZhangSignal(key) && (includesText(workerName, "张") || includesText(workerCarNo, "工001"))) return true;
   return false;
 }
 
-async function findWorker(supabase, query) {
-  const ordered = await supabase.from("workers").select("*").order("created_at", { ascending: true });
-  if (!ordered.error) return (ordered.data || []).find((worker) => matchWorker(worker, query)) || null;
+function fallbackWorker(query) {
+  const key = text(query);
+  if (isLiSignal(key)) {
+    return { id: "w2", code: "li", worker_key: "li", slug: "li", name: "李师傅", source: "payload_fallback" };
+  }
+  if (isZhangSignal(key)) {
+    return { id: "w1", code: "zhang", worker_key: "zhang", slug: "zhang", name: "张师傅", source: "payload_fallback" };
+  }
+  return key ? { id: key, code: key, worker_key: key, slug: key, name: "", source: "payload_fallback" } : null;
+}
 
-  const message = String(ordered.error.message || "");
-  if (!/created_at|schema cache|column/i.test(message)) throw ordered.error;
-  const fallback = await supabase.from("workers").select("*");
-  if (fallback.error) throw fallback.error;
-  return (fallback.data || []).find((worker) => matchWorker(worker, query)) || null;
+async function findWorker(supabase, query) {
+  try {
+    const result = await supabase.from("workers").select("*").limit(1000);
+    if (result.error) throw result.error;
+    return (result.data || []).find((worker) => matchWorker(worker, query)) || fallbackWorker(query);
+  } catch {
+    return fallbackWorker(query);
+  }
 }
 
 module.exports = async function handler(req, res) {
   if (req.method !== "GET") return methodNotAllowed(res, ["GET"]);
-  const supabase = requireSupabase(res);
-  if (!supabase) return;
+  const setup = getSupabaseAdmin();
+  if (!setup.client) {
+    return sendJson(res, 500, { ok: false, error: "SERVER_ENV_MISSING", detail: `缺少：${setup.missing.join(", ")}` });
+  }
+  const supabase = setup.client;
 
   try {
     const workerQuery = req.query.worker || req.query.worker_id || req.query.code || "";

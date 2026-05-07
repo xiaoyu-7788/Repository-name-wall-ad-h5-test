@@ -590,3 +590,49 @@ npm run test:e2e
 - 如果 Vercel 重新部署后仍派单失败，请进入 Vercel 项目 `Functions -> Logs`，筛选 `/api/dispatch`。
 - 对照后台“派单调试信息”中的 payload、HTTP status、stage、message、details 排查 Supabase 表字段、数据或权限问题。
 - 本轮没有打印、提交或写入 `.env` 真实密钥。
+
+## 17. dispatch workers 查询兜底修复
+
+更新时间：2026-05-07。
+
+修改文件：
+
+- `api/_shared.js`
+- `api/dispatch.js`
+- `api/worker-tasks.js`
+- `api/debug-dispatch.js`
+- `src/App.jsx`
+- `tests/e2e/app.spec.js`
+- `README.md`
+- `TEST_REPORT.md`
+- `DEPLOY_RESULT.md`
+
+修复内容：
+
+- `/api/dispatch` 已改为和 `/api/diagnose` 一样复用 `_shared.getSupabaseAdmin()` 初始化 Supabase 服务端客户端。
+- `/api/dispatch` 不使用 `VITE_SUPABASE_URL` 或 `VITE_SUPABASE_ANON_KEY`，只读取服务端 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`。
+- `find_worker` 阶段改为 `workers.select("*").limit(1000)`，避免因字段或排序差异导致查询失败。
+- 如果 `workers` 查询失败但 payload 中有 `worker_id`，后端会用 payload 的 `worker_id` 继续派单，并在成功响应中返回 `worker_lookup_warning`。
+- `dispatch_tasks` 写入支持多级降级：优先写 `id/worker_id/point_id/status/assigned_at/created_at`，字段不兼容时降级为最小字段。
+- `wall_points` 状态更新支持 `updated_at` 不存在时自动降级，只更新 `status = 施工中`。
+- 新增 `GET /api/debug-dispatch`，返回非敏感服务端环境状态、Supabase host、三张关键表的读取状态和字段名列表。
+- 前端派单失败调试信息增加 `error_name` 和 `error_message`。
+
+执行过的命令：
+
+```bash
+npm run build
+npm run test:e2e
+npm run test:supabase
+```
+
+结果：
+
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，12 passed。
+- `npm run test:supabase`：失败；原因仍是当前本机网络无法访问 Supabase REST/Storage endpoint。脚本仅显示变量存在/隐藏状态，没有打印真实 key。
+
+线上验证建议：
+
+- 推送并在 Vercel Redeploy 后，先访问 `/api/debug-dispatch`。
+- 再在后台派单，若仍失败，查看后台“派单调试信息”和 Vercel `Functions -> Logs` 中 `/api/dispatch` 的 `stage/message/error_name/error_message/details`。

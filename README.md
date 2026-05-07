@@ -288,3 +288,9 @@ vercel build
 6. 手机端上传照片/视频时调用 `POST /api/upload`，写入 Storage 和 `point_photos`，并把点位状态改为“已完成”。
 
 如果线上仍提示派单失败，请打开 Vercel 项目后台，进入 `Functions -> Logs`，筛选 `/api/dispatch`，查看返回的 `stage`、`message`、`details`。后台页面也会在“派单调试信息”里显示请求地址、payload、HTTP status 和后端响应，便于截图排查。
+
+辅助调试：
+
+- 访问 `https://你的部署域名/api/debug-dispatch` 可以查看服务端是否读取到 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`、当前 Supabase host，以及 `workers`、`dispatch_tasks`、`wall_points` 的非敏感字段列表。
+- `/api/debug-dispatch` 不返回任何真实 key。
+- 如果 `/api/dispatch` 查询 `workers` 失败，但请求 payload 里带了 `worker_id`，后端会先使用该 `worker_id` 继续写入 `dispatch_tasks`，并在响应里返回 `worker_lookup_warning` 供排查。

@@ -165,3 +165,24 @@ C:\Users\wangs\AppData\Roaming\npm\vercel.cmd whoami
 - 本次代码推送到 GitHub 后，需要在 Vercel 对当前项目执行 Redeploy，生产环境才会使用新的 `/api/dispatch` 和前端按钮逻辑。
 - 如果 Redeploy 后仍失败，请进入 Vercel `Functions -> Logs`，筛选 `/api/dispatch`，查看 `stage/message/details`。
 - 不需要把任何真实密钥发到聊天里；只需要确认 Vercel Environment Variables 已配置 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`。
+
+## dispatch workers 查询兜底修复
+
+更新时间：2026-05-07。
+
+当前状态：
+
+- `/api/dispatch` 已和 `/api/diagnose` 使用同一套 `_shared.getSupabaseAdmin()` 服务端 Supabase 客户端。
+- `find_worker` 查询失败时，如果 payload 有 `worker_id`，会继续用该 `worker_id` 写入 `dispatch_tasks`，不会直接中断派单。
+- 新增 `/api/debug-dispatch`，用于线上查看服务端变量是否存在、Supabase host、`workers`、`dispatch_tasks`、`wall_points` 是否可读及字段列表。
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，12 passed。
+- `npm run test:supabase`：本机网络失败，未打印真实 key。
+
+Redeploy 后建议访问：
+
+```text
+https://你的部署域名/api/debug-dispatch
+```
+
+确认 debug 通过后，再回后台执行派单测试。

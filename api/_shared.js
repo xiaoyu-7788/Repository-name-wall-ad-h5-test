@@ -135,6 +135,21 @@ function getSupabaseAdmin() {
   };
 }
 
+function getSafeSupabaseEnv() {
+  const url = process.env.SUPABASE_URL || "";
+  let supabaseHost = "";
+  try {
+    supabaseHost = url ? new URL(url).hostname : "";
+  } catch {
+    supabaseHost = "";
+  }
+  return {
+    has_SUPABASE_URL: Boolean(url),
+    has_SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    supabase_host: supabaseHost,
+  };
+}
+
 function requireSupabase(res) {
   const setup = getSupabaseAdmin();
   if (!setup.client) {
@@ -193,6 +208,7 @@ module.exports = {
   parseBody,
   classifyError,
   getSupabaseAdmin,
+  getSafeSupabaseEnv,
   requireSupabase,
   listState,
   ensureDemoData,
