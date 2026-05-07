@@ -5,7 +5,7 @@
 ## 当前部署状态
 
 - GitHub：已连接远程私有仓库，并已推送 `main` 分支。
-- Vercel：未连接；当前 PowerShell 仍找不到全局 `vercel` 命令，`npx vercel` 可运行但没有登录凭据。
+- Vercel：未连接；当前 PowerShell 能找到 Vercel CLI，但 CLI 没有有效登录凭据。
 - Vercel 环境变量：未能自动检查；需要在 Vercel 项目后台人工配置。
 - 预览环境：未部署。
 - 生产环境：未部署。
@@ -40,6 +40,9 @@
 - 当前机器找不到 `vercel` 命令。
 - `npx --yes vercel --version` 可运行，版本为 `53.2.0`。
 - `npx --yes vercel whoami` 显示当前会话没有 Vercel 凭据，并且登录流程因非 ASCII 请求头报错。
+- 再次检查 `vercel whoami` 和 `vercel.cmd whoami`，结果仍是没有现有凭据。
+- 已发现 Vercel auth 文件存在于 `AppData\Roaming\com.vercel.cli\Data\auth.json`，但文件大小只有 3 bytes，内容为空对象，说明登录没有真正保存 token。
+- 未发现 `VERCEL_TOKEN` 环境变量。
 - 按安全要求，没有强行全局安装工具，也没有要求用户把 token 或真实环境变量发到聊天中。
 
 GitHub 推送说明：

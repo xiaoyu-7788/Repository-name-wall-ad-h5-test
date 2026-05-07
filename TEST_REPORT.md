@@ -422,3 +422,30 @@ C:\Users\wangs\AppData\Roaming\npm\vercel.cmd whoami
 ```
 
 3. `vercel whoami` 能正常显示账号后，再继续自动部署。
+
+## 14. Vercel 登录状态再次检查
+
+更新时间：2026-05-07。
+
+执行过的命令：
+
+```bash
+vercel whoami
+C:\Users\wangs\AppData\Roaming\npm\vercel.cmd whoami
+vercel --version
+```
+
+结果：
+
+- 当前 PowerShell 可以找到 Vercel CLI。
+- `vercel --version`：可用，版本为 `53.2.0`。
+- `vercel whoami`：失败，提示没有现有凭据并尝试进入登录流程。
+- `vercel.cmd whoami`：同样失败。
+- 检测到 Vercel auth 文件存在，但大小只有 3 bytes，实际没有保存登录 token。
+- `VERCEL_TOKEN` 环境变量不存在。
+- 由于 CLI 未登录，未执行 `vercel link`、`vercel build`、`vercel deploy`、`vercel deploy --prod`。
+
+当前阻塞：
+
+- 这是 Vercel 账号登录/授权问题，需要人工在本机 CLI 中完成。
+- 不要把 Vercel token 或任何真实环境变量发到聊天里。
