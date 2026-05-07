@@ -4,7 +4,7 @@
 
 ## 当前部署状态
 
-- GitHub：本地 Git 仓库已初始化并已提交；尚未连接远程 GitHub 仓库。
+- GitHub：已连接远程私有仓库，并已推送 `main` 分支。
 - Vercel：未连接；当前机器未安装 Vercel CLI。
 - Vercel 环境变量：未能自动检查；需要在 Vercel 项目后台人工配置。
 - 预览环境：未部署。
@@ -15,6 +15,9 @@
 - 已新增 `AGENTS.md` 项目长期规则。
 - 已确认 `.env` 被 `.gitignore` 忽略，没有进入 Git 提交。
 - 已提交本地 Git commit：`chore: prepare h5 app for vercel deployment`。
+- 已添加远程仓库：`https://github.com/xiaoyu-7788/Repository-name-wall-ad-h5-test.git`。
+- 已切换当前分支为 `main`。
+- 已推送到 `origin/main`。
 - `npm install`：通过。
 - `npm run build`：通过。
 - `npm run test:e2e`：通过，8 passed。
@@ -36,32 +39,15 @@
 - 当前机器找不到 `vercel` 命令。
 - 按安全要求，没有强行全局安装工具。
 
-GitHub 远程也尚未配置：
+GitHub 推送说明：
 
-- 当前本地仓库没有 `origin` remote。
-- 需要用户在 GitHub 创建私有仓库，然后把远程地址添加到本地并 push。
+- 首次普通 `git push` 因本机 `127.0.0.1` 代理无法连接 GitHub 失败。
+- 已使用临时禁用 Git 代理的单次命令完成推送，没有修改全局 Git 代理配置。
+- 本地状态显示 `main` 已跟踪 `origin/main`。
 
 ## 用户继续操作
 
-### 1. 创建 GitHub 私有仓库
-
-1. 打开 GitHub。
-2. 右上角点 `+`。
-3. 点 `New repository`。
-4. Repository name 建议填写：`wall-ad-h5-test`。
-5. 选择 `Private`。
-6. 不要勾选 README、.gitignore、license。
-7. 点 `Create repository`。
-
-创建后，在本项目目录运行：
-
-```bash
-git remote add origin 你的GitHub仓库地址
-git branch -M main
-git push -u origin main
-```
-
-### 2. 安装并登录 Vercel CLI
+### 1. 安装并登录 Vercel CLI
 
 如果希望继续让我自动部署，请先在终端运行：
 
@@ -72,7 +58,7 @@ vercel login
 
 登录完成后，回到本项目目录，再让我继续。
 
-### 3. 在 Vercel 导入 GitHub 项目
+### 2. 在 Vercel 导入 GitHub 项目
 
 也可以不用 CLI，直接在 Vercel 网页操作：
 

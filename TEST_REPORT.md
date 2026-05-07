@@ -316,3 +316,54 @@ git push -u origin main
 4. Framework 选 `Vite`，Build Command 填 `npm run build`，Output Directory 填 `dist`。
 5. 添加 Vercel 环境变量后部署。
 6. 部署后访问后台和 `/worker?worker=li` 做真实手机测试。
+
+## 12. GitHub 推送与 Vercel CLI 检查
+
+更新时间：2026-05-07。
+
+执行过的命令：
+
+```bash
+git ls-files --error-unmatch .env
+git remote add origin https://github.com/xiaoyu-7788/Repository-name-wall-ad-h5-test.git
+git branch -M main
+git push -u origin main
+git -c http.proxy= -c https.proxy= push -u origin main
+git status -sb --ignored
+git branch -vv
+vercel --version
+```
+
+结果：
+
+- `.env` 未被 Git 跟踪。
+- 已添加远程仓库 `origin`。
+- 当前分支已切换为 `main`。
+- 首次 `git push` 因本机 `127.0.0.1` 代理无法连接 GitHub 失败。
+- 随后使用单次临时禁用 Git 代理的 push 命令完成推送，未修改全局 Git 配置。
+- 本地 Git 状态显示 `main` 正在跟踪 `origin/main`。
+- `vercel --version` 失败：当前机器未安装 Vercel CLI。
+
+下一步人工动作：
+
+```bash
+npm i -g vercel
+vercel login
+```
+
+登录完成后可继续执行：
+
+```bash
+vercel link
+vercel build
+```
+
+如果 Vercel 项目尚未配置环境变量，请进入 Vercel 项目 `Settings -> Environment Variables` 添加：
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_AMAP_KEY`
+- `VITE_AMAP_SECURITY_CODE`
+- `VITE_KIMI_CLASSIFY_ENDPOINT`，可选
+
+不要把真实变量值写入仓库或聊天。
