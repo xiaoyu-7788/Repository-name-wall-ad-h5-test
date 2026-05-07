@@ -186,3 +186,24 @@ https://你的部署域名/api/debug-dispatch
 ```
 
 确认 debug 通过后，再回后台执行派单测试。
+
+## API 路由排除 SPA rewrite
+
+更新时间：2026-05-07。
+
+当前状态：
+
+- `vercel.json` 已改为 `/((?!api/.*).*) -> /index.html`，所有 `/api/*` 会保留给 Vercel Serverless Functions。
+- 已新增 `/api/debug-network`，用于确认服务端环境变量存在性和 Supabase REST 网络可达性，不返回任何真实 key。
+- `/api/debug-dispatch`、`/api/dispatch`、`/api/worker-tasks` 不会再被 SPA rewrite 接管。
+- `/worker?worker=li` 仍会回到 `/index.html`，继续打开前端移动端。
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，14 passed。
+
+Redeploy 后请优先检查：
+
+```text
+https://你的部署域名/api/debug-network
+https://你的部署域名/api/debug-dispatch
+https://你的部署域名/worker?worker=li
+```

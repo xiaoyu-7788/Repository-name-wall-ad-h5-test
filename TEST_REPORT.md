@@ -636,3 +636,39 @@ npm run test:supabase
 
 - 推送并在 Vercel Redeploy 后，先访问 `/api/debug-dispatch`。
 - 再在后台派单，若仍失败，查看后台“派单调试信息”和 Vercel `Functions -> Logs` 中 `/api/dispatch` 的 `stage/message/error_name/error_message/details`。
+
+## 18. Vercel API 路由排除 SPA rewrite
+
+更新时间：2026-05-07。
+
+修改内容：
+
+- `vercel.json` 已改为只把非 `/api/*` 的路径重写到 `/index.html`。
+- 新增 `api/debug-network.js`，访问 `/api/debug-network` 时返回 JSON，不进入前端后台页面。
+- 新增 E2E 防回归测试，确认 `vercel.json` 不会把 `/api` 路由交给 SPA。
+- 新增 E2E handler 测试，确认 `/api/debug-network` 返回 JSON 结构。
+
+最终 `vercel.json`：
+
+```json
+{
+  "rewrites": [
+    {
+      "source": "/((?!api/.*).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+```
+
+执行过的命令：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+结果：
+
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，14 passed。

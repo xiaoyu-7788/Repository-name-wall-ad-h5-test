@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const Module = require("node:module");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
+const debugNetworkHandler = require("../../api/debug-network.js");
 const diagnoseHandler = require("../../api/diagnose.js");
 
 const STORE_KEY = "wall-ad-h5-demo-state";
@@ -336,5 +337,32 @@ test.describe("墙体广告执行 H5 派单系统", () => {
     expect(appSource).toContain('url: "/api/dispatch"');
     expect(apiClientSource).toContain("export async function dispatchPoints");
     expect(apiClientSource).toContain('requestApi("/api/dispatch"');
+  });
+
+  test("测试 13：Vercel 不把 /api 路由重写到前端", async () => {
+    const vercelConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "..", "vercel.json"), "utf8"));
+    expect(vercelConfig.rewrites).toEqual([
+      {
+        source: "/((?!api/.*).*)",
+        destination: "/index.html",
+      },
+    ]);
+  });
+
+  test("测试 14：/api/debug-network 返回 JSON 结构", async () => {
+    const oldUrl = process.env.SUPABASE_URL;
+    const oldKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const response = await invokeApi(debugNetworkHandler);
+    if (oldUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = oldUrl;
+    if (oldKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = oldKey;
+
+    expect(response.status).toBe(200);
+    expect(response.headers["Content-Type"]).toContain("application/json");
+    expect(response.body).toHaveProperty("ok");
+    expect(response.body).toHaveProperty("env");
+    expect(response.body).toHaveProperty("tests");
+    expect(response.body.tests.some((item) => item.name === "SUPABASE_REST_REACHABLE")).toBeTruthy();
   });
 });
