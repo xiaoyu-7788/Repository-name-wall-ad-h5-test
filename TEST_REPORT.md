@@ -238,3 +238,81 @@ npm run test:e2e
 4. 在 Vercel Settings -> Environment Variables 添加真实的 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`、`VITE_AMAP_KEY`、`VITE_AMAP_SECURITY_CODE`，如启用 Kimi 再添加 `VITE_KIMI_CLASSIFY_ENDPOINT`。
 5. 部署后打开后台，点击“Supabase诊断”，确认环境变量、表、RLS 和 Storage 通过。
 6. 用真实手机访问 `/worker?worker=li`，完成派单和上传照片/视频测试，确认后台点位状态变为“已完成”。
+
+## 11. 自动推进到真实测试版结果
+
+更新时间：2026-05-07。
+
+修改文件列表：
+
+- `.gitignore`
+- `.env.example`
+- `README.md`
+- `DEPLOY_CHECKLIST.md`
+- `TEST_REPORT.md`
+- `vercel.json`
+
+新增文件列表：
+
+- `AGENTS.md`
+- `DEPLOY_RESULT.md`
+
+执行过的命令：
+
+```bash
+npm install
+npm run build
+npm run test:e2e
+npm run test:supabase
+git init
+git check-ignore -v .env .env.local dist node_modules playwright-report test-results
+git add .
+git commit -m "chore: prepare h5 app for vercel deployment"
+git remote -v
+vercel --version
+```
+
+本地验证结果：
+
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，8 passed。
+- `npm run test:supabase`：失败；原因是当前机器无法访问 Supabase REST/Storage endpoint，属于本地网络、代理、TLS 或 Supabase endpoint 可访问性问题。脚本在写入 `test_` 数据前失败，未创建测试业务数据。
+
+GitHub 状态：
+
+- 本地 Git 仓库已初始化。
+- 已提交 commit：`chore: prepare h5 app for vercel deployment`。
+- `.env` 已确认被 `.gitignore` 忽略，没有进入提交。
+- 当前没有远程 `origin`，因此未能 push 到 GitHub。
+
+Vercel 状态：
+
+- `vercel --version`：失败，当前机器未安装 Vercel CLI。
+- `vercel build`：未执行，原因是 Vercel CLI 不存在。
+- `vercel deploy`：未执行，原因是 Vercel CLI 不存在且项目未 link。
+- Preview URL：无。
+- Production URL：无。
+
+仍需人工处理的问题：
+
+- 在 GitHub 创建私有仓库，并把本地仓库 push 上去。
+- 安装并登录 Vercel CLI，或在 Vercel 网页导入 GitHub 仓库。
+- 在 Vercel 项目 Settings -> Environment Variables 中配置真实环境变量。不要把真实值发到聊天里，也不要写入仓库。
+- 本地 Supabase 网络失败，建议部署到 Vercel 公网 HTTPS 后，通过后台 Supabase 诊断和真实手机上传流程继续验证。
+- `npm install` 仍提示 1 个 high severity audit 项，建议后续单独评估依赖升级风险。
+
+下一步操作：
+
+1. GitHub 创建 Private repository，建议仓库名 `wall-ad-h5-test`。
+2. 本地执行：
+
+```bash
+git remote add origin 你的GitHub仓库地址
+git branch -M main
+git push -u origin main
+```
+
+3. Vercel 网页点 `New Project`，导入该 GitHub 仓库。
+4. Framework 选 `Vite`，Build Command 填 `npm run build`，Output Directory 填 `dist`。
+5. 添加 Vercel 环境变量后部署。
+6. 部署后访问后台和 `/worker?worker=li` 做真实手机测试。
