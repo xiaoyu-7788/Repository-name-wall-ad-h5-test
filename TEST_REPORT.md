@@ -367,3 +367,58 @@ vercel build
 - `VITE_KIMI_CLASSIFY_ENDPOINT`，可选
 
 不要把真实变量值写入仓库或聊天。
+
+## 13. Vercel CLI 登录阻塞复查
+
+更新时间：2026-05-07。
+
+执行过的命令：
+
+```bash
+vercel --version
+npm list -g vercel --depth=0
+npx --yes vercel --version
+npx --yes vercel whoami
+npm install
+npm run build
+npm run test:e2e
+```
+
+结果：
+
+- `vercel --version`：失败，当前 PowerShell 找不到全局 `vercel` 命令。
+- `npm list -g vercel --depth=0`：未发现全局安装的 `vercel`。
+- `npx --yes vercel --version`：通过，临时 CLI 版本为 `53.2.0`。
+- `npx --yes vercel whoami`：失败，当前会话没有 Vercel 登录凭据；CLI 进入登录流程后因非 ASCII 请求头报错。
+- 已给 `package.json` 添加 ASCII 项目名 `wall-ad-h5-test` 和 `private: true`，避免工具链从目录或系统名称推断项目名。
+- 修改后重新运行 `npm install`：通过。
+- 修改后重新运行 `npm run build`：通过。
+- 修改后重新运行 `npm run test:e2e`：通过，8 passed。
+
+Vercel 部署状态：
+
+- `vercel link`：未执行，原因是 CLI 未登录。
+- Vercel 环境变量检查：未执行，原因是 CLI 未登录且项目未 link。
+- `vercel build`：未执行，原因是 CLI 未登录且项目未 link。
+- `vercel deploy`：未执行，原因是 CLI 未登录且项目未 link。
+- Preview URL：无。
+- Production URL：无。
+
+需要人工处理：
+
+1. 在普通 PowerShell 中执行：
+
+```bash
+npm i -g vercel
+vercel login
+vercel whoami
+```
+
+2. 如果 `vercel` 找不到命令，确认 `C:\Users\wangs\AppData\Roaming\npm` 已加入 PATH，或直接运行：
+
+```bash
+C:\Users\wangs\AppData\Roaming\npm\vercel.cmd login
+C:\Users\wangs\AppData\Roaming\npm\vercel.cmd whoami
+```
+
+3. `vercel whoami` 能正常显示账号后，再继续自动部署。

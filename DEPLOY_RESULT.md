@@ -5,7 +5,7 @@
 ## 当前部署状态
 
 - GitHub：已连接远程私有仓库，并已推送 `main` 分支。
-- Vercel：未连接；当前机器未安装 Vercel CLI。
+- Vercel：未连接；当前 PowerShell 仍找不到全局 `vercel` 命令，`npx vercel` 可运行但没有登录凭据。
 - Vercel 环境变量：未能自动检查；需要在 Vercel 项目后台人工配置。
 - 预览环境：未部署。
 - 生产环境：未部署。
@@ -18,6 +18,7 @@
 - 已添加远程仓库：`https://github.com/xiaoyu-7788/Repository-name-wall-ad-h5-test.git`。
 - 已切换当前分支为 `main`。
 - 已推送到 `origin/main`。
+- 已给 `package.json` 补充 ASCII 项目名 `wall-ad-h5-test` 和 `private: true`，便于 Node/Vercel 工具识别项目。
 - `npm install`：通过。
 - `npm run build`：通过。
 - `npm run test:e2e`：通过，8 passed。
@@ -37,7 +38,9 @@
 
 - 执行 `vercel --version` 失败。
 - 当前机器找不到 `vercel` 命令。
-- 按安全要求，没有强行全局安装工具。
+- `npx --yes vercel --version` 可运行，版本为 `53.2.0`。
+- `npx --yes vercel whoami` 显示当前会话没有 Vercel 凭据，并且登录流程因非 ASCII 请求头报错。
+- 按安全要求，没有强行全局安装工具，也没有要求用户把 token 或真实环境变量发到聊天中。
 
 GitHub 推送说明：
 
@@ -56,7 +59,21 @@ npm i -g vercel
 vercel login
 ```
 
-登录完成后，回到本项目目录，再让我继续。
+登录完成后，确认下面命令在普通 PowerShell 里可以成功输出账号名：
+
+```bash
+vercel --version
+vercel whoami
+```
+
+如果 `vercel` 仍提示找不到命令，请确认 `C:\Users\wangs\AppData\Roaming\npm` 已加入 PATH，或直接运行：
+
+```bash
+C:\Users\wangs\AppData\Roaming\npm\vercel.cmd --version
+C:\Users\wangs\AppData\Roaming\npm\vercel.cmd whoami
+```
+
+确认成功后，回到本项目目录，再让我继续。
 
 ### 2. 在 Vercel 导入 GitHub 项目
 
