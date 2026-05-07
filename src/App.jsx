@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { supabase, isSupabaseConfigured, supabaseEnv } from "./supabaseClient";
-import { getDataModeLabel, isLocalDataMode, isProxyDataMode, proxyApi } from "./apiClient";
+import { dispatchPoints as dispatchPointsApi, getDataModeLabel, isLocalDataMode, isProxyDataMode, proxyApi } from "./apiClient";
 import "./styles.css";
 
 const STATUS = ["待施工", "施工中", "已完成", "需复查"];
@@ -356,6 +356,8 @@ function useH5Data() {
   const [photos, setPhotos] = useState(initialState.photos);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [dispatchDebug, setDispatchDebug] = useState(null);
+  const [dataSource, setDataSource] = useState(isLocalDataMode ? "本地演示任务" : getDataModeLabel());
 
   function applyLocalState(updater) {
     const current = readLocalDemoState();
@@ -393,6 +395,7 @@ function useH5Data() {
       setPoints(next.points);
       setTasks(next.tasks);
       setPhotos(next.photos);
+      setDataSource("本地演示任务");
       setMessage(`当前未配置 Supabase，正在使用本地演示数据（${cnTime()}）。`);
       return;
     }
@@ -404,6 +407,7 @@ function useH5Data() {
         setPoints(state.points || []);
         setTasks(state.tasks || []);
         setPhotos(state.photos || []);
+        setDataSource("Vercel API 代理数据");
         setMessage(`已通过 Vercel API 代理读取 Supabase 数据（${cnTime()}）。`);
         return;
       }
@@ -419,11 +423,40 @@ function useH5Data() {
       setPoints(p || []);
       setTasks(t || []);
       setPhotos(ph || []);
+      setDataSource("Supabase 直连数据");
       setMessage(`已连接 Supabase 数据库（${cnTime()}）。`);
     } catch (err) {
       const issue = classifySupabaseError(err);
       console.error(err);
       setMessage(`读取 Supabase 失败：${issue.category}。${issue.detail}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadWorkerTasks(workerCode) {
+    if (!isProxyDataMode) {
+      await loadAll();
+      return;
+    }
+    setLoading(true);
+    try {
+      const state = await proxyApi.workerTasks(workerCode);
+      setWorkers(state.worker ? [state.worker] : []);
+      setPoints(state.points || []);
+      setTasks(state.tasks || []);
+      setPhotos(state.photos || []);
+      setDataSource("真实派单任务");
+      setMessage(`已通过 /api/worker-tasks 读取 ${state.points?.length || 0} 个真实派单任务。`);
+    } catch (err) {
+      const issue = classifySupabaseError(err);
+      const next = readLocalDemoState();
+      setWorkers(next.workers);
+      setPoints(next.points);
+      setTasks(next.tasks);
+      setPhotos(next.photos);
+      setDataSource("本地演示任务");
+      setMessage(`读取真实派单任务失败，已回退本地演示：${issue.category}。${issue.detail}`);
     } finally {
       setLoading(false);
     }
@@ -552,6 +585,50 @@ function useH5Data() {
 
   async function dispatchPoints(workerId, pointIds) {
     const selectedIds = [...new Set(pointIds)];
+    const worker = workers.find((item) => item.id === workerId || item.code === workerId) || {};
+
+    if (isProxyDataMode) {
+      const requestPayload = {
+        worker_id: worker.id || workerId,
+        worker_key: worker.code || worker.worker_key || worker.slug || workerId,
+        worker_name: worker.name || "",
+        worker_phone: worker.phone || "",
+        point_ids: selectedIds,
+      };
+      setLoading(true);
+      setDispatchDebug(null);
+      try {
+        const result = await dispatchPointsApi(requestPayload);
+        await loadAll();
+        setDispatchDebug({
+          url: "/api/dispatch",
+          payload: requestPayload,
+          status: 200,
+          response: result,
+          stage: result.stage || "",
+          message: result.ok ? "派单成功" : "",
+          details: result.details || "",
+        });
+        setMessage(`已成功发送 ${result.inserted || selectedIds.length} 个点位给 ${result.worker?.name || worker.name || "指定师傅"}。`);
+        return;
+      } catch (err) {
+        const issue = classifySupabaseError(err);
+        setDispatchDebug({
+          url: "/api/dispatch",
+          payload: requestPayload,
+          stage: err.stage || err.data?.stage || "",
+          message: err.message || err.data?.message || issue.category,
+          details: err.details || err.data?.details || issue.detail,
+          status: err.status || "",
+          response: err.data || null,
+        });
+        setMessage(`派单失败：${err.stage || err.data?.stage ? `${err.stage || err.data?.stage}，` : ""}${err.message || issue.category}。${err.details || err.data?.details || issue.detail}`);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     const existingTaskKeys = new Set(tasks.map((task) => `${task.worker_id}:${task.point_id}`));
     const payload = selectedIds
       .filter((pointId) => !existingTaskKeys.has(`${workerId}:${pointId}`))
@@ -559,7 +636,7 @@ function useH5Data() {
         id: uid("task"),
         worker_id: workerId,
         point_id: pointId,
-        status: "已派发",
+        status: "施工中",
         created_at: nowIso(),
       }));
 
@@ -588,13 +665,8 @@ function useH5Data() {
     }
 
     setLoading(true);
+    setDispatchDebug(null);
     try {
-      if (isProxyDataMode) {
-        await proxyApi.dispatch(workerId, selectedIds);
-        await loadAll();
-        setMessage("已通过 Vercel API 代理写入 dispatch_tasks，并派单到指定师傅移动端。");
-        return;
-      }
       const { error } = await supabase.from("dispatch_tasks").insert(payload);
       if (error) throw error;
       const { error: updateError } = await supabase
@@ -607,7 +679,22 @@ function useH5Data() {
       setMessage("已写入 dispatch_tasks，并派单到指定师傅移动端。");
     } catch (err) {
       const issue = classifySupabaseError(err);
-      setMessage(`派单失败：${issue.category}。${issue.detail}`);
+      const payload = {
+        worker_id: worker.id || workerId,
+        worker_key: worker.code || worker.worker_key || worker.slug || workerId,
+        worker_name: worker.name || "",
+        worker_phone: worker.phone || "",
+        point_ids: selectedIds,
+      };
+      setDispatchDebug({
+        url: "/api/dispatch",
+        payload,
+        stage: err.stage || "",
+        message: err.message || issue.category,
+        details: err.details || issue.detail,
+        status: err.status || "",
+      });
+      setMessage(`派单失败：${err.stage ? `${err.stage}，` : ""}${issue.category}。${issue.detail}`);
     } finally {
       setLoading(false);
     }
@@ -722,8 +809,11 @@ function useH5Data() {
     photos,
     loading,
     message,
+    dispatchDebug,
+    dataSource,
     setMessage,
     loadAll,
+    loadWorkerTasks,
     seedDemoData,
     addPoints,
     updatePoint,
@@ -833,7 +923,7 @@ function DiagnosticPanel({ compact = false }) {
 }
 
 function AdminPage({ data }) {
-  const { workers, points, tasks, photos, loading, message, loadAll, seedDemoData, dispatchPoints, addPoints, updatePoint, renameProject, updatePhotoKind, setMessage } = data;
+  const { workers, points, tasks, photos, loading, message, dispatchDebug, loadAll, seedDemoData, dispatchPoints, addPoints, updatePoint, renameProject, updatePhotoKind, setMessage } = data;
   const [activeTab, setActiveTab] = useState("console");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("全部");
@@ -905,7 +995,7 @@ function AdminPage({ data }) {
     setSelectedPointId(id);
   }
 
-  async function handleDispatch() {
+  async function handleDispatchSelectedPoints() {
     await dispatchPoints(workerId, selectedIds);
   }
 
@@ -1002,6 +1092,12 @@ function AdminPage({ data }) {
         </header>
 
         {message && <section className="info">{message}</section>}
+        {dispatchDebug && (
+          <details className="info">
+            <summary>派单调试信息</summary>
+            <pre>{JSON.stringify(dispatchDebug, null, 2)}</pre>
+          </details>
+        )}
 
         <section className="metrics-grid">
           <MiniMetric label="全部点位" value={formatCount(points.length)} />
@@ -1035,7 +1131,7 @@ function AdminPage({ data }) {
             setSelectedIds={setSelectedIds}
             setSelectedPointId={setSelectedPointId}
             toggle={toggle}
-            handleDispatch={handleDispatch}
+            handleDispatch={handleDispatchSelectedPoints}
             handleGeocode={handleGeocode}
             loading={loading}
           />
@@ -1168,6 +1264,11 @@ function ConsolePanel(props) {
           <button onClick={() => setSelectedIds([])}>全不选</button>
           <button onClick={() => setSelectedIds(filtered.map((point) => point.id).filter((id) => !selectedIds.includes(id)))}>反选</button>
           <button className="primary" onClick={handleDispatch} disabled={!selectedIds.length || loading}>发送已选点位到师傅移动端</button>
+          {workers.find((worker) => worker.id === workerId) && (
+            <a className="open-worker-link" href={`/worker?worker=${workers.find((worker) => worker.id === workerId)?.code || workerId}`} target="_blank" rel="noreferrer">
+              打开该师傅移动端
+            </a>
+          )}
         </div>
       </section>
 
@@ -1516,7 +1617,7 @@ function KimiPanel({ photos, points, handleKimiClassify }) {
 }
 
 function WorkerPage({ data, workerCode }) {
-  const { workers, points, tasks, photos, uploadPhoto, loadAll, message } = data;
+  const { workers, points, tasks, photos, uploadPhoto, loadAll, loadWorkerTasks, message, dataSource } = data;
   const worker = workers.find((w) => w.code === workerCode) || workers[0] || demoWorkers[0];
   const myTaskIds = tasks.filter((t) => t.worker_id === worker.id).map((t) => t.point_id);
   const assigned = points.filter((p) => myTaskIds.includes(p.id));
@@ -1536,7 +1637,11 @@ function WorkerPage({ data, workerCode }) {
         await uploadPhoto({ file, point, worker });
       }
       setLocalMessage(`${point.title} 已上传资料，Storage / point_photos 写入后自动更新为已完成。`);
-      await loadAll();
+      if (isProxyDataMode) {
+        await loadWorkerTasks(workerCode);
+      } else {
+        await loadAll();
+      }
     } catch (err) {
       const issue = classifySupabaseError(err);
       setLocalMessage(`上传失败：${issue.category}。${issue.detail}`);
@@ -1552,6 +1657,7 @@ function WorkerPage({ data, workerCode }) {
         <div className="tag">师傅移动端 H5</div>
         <h1>{worker.name} 的任务</h1>
         <p>{worker.car_no} / {worker.phone}</p>
+        <small>数据来源：{dataSource || (isLocalDataMode ? "本地演示任务" : "真实派单任务")}</small>
       </header>
 
       {isLocalDataMode && <section className="warn">当前是本地演示模式。跨设备测试请配置 Vercel API 代理或 Supabase 直连。</section>}
@@ -1618,8 +1724,12 @@ function App() {
   const data = useH5Data();
 
   useEffect(() => {
-    data.loadAll();
-  }, []);
+    if (route.page === "worker" && isProxyDataMode) {
+      data.loadWorkerTasks(route.workerCode);
+    } else {
+      data.loadAll();
+    }
+  }, [route.page, route.workerCode]);
 
   if (route.page === "worker") return <WorkerPage data={data} workerCode={route.workerCode} />;
   return <AdminPage data={data} />;

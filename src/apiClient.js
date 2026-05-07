@@ -38,13 +38,24 @@ export async function requestApi(path, options = {}) {
   });
   const body = await parseResponse(response);
   if (!response.ok || body.ok === false) {
-    const error = new Error(body.detail || body.error || `API 请求失败：${response.status}`);
+    const error = new Error(body.message || body.detail || body.error || `API 请求失败：${response.status}`);
     error.category = body.error || body.category || "代理失败";
     error.detail = body.detail || error.message;
+    error.details = body.details || body.detail || "";
+    error.stage = body.stage || "";
     error.status = response.status;
+    error.payload = body;
+    error.data = body;
     throw error;
   }
   return body;
+}
+
+export async function dispatchPoints(payload) {
+  return requestApi("/api/dispatch", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 function fileToBase64(file) {
@@ -84,11 +95,11 @@ export const proxyApi = {
   getWorkers() {
     return requestApi("/api/workers");
   },
-  dispatch(workerId, pointIds) {
-    return requestApi("/api/dispatch", {
-      method: "POST",
-      body: JSON.stringify({ worker_id: workerId, point_ids: pointIds }),
-    });
+  dispatch(payloadOrWorkerId, pointIds = []) {
+    const payload = typeof payloadOrWorkerId === "object"
+      ? payloadOrWorkerId
+      : { worker_id: payloadOrWorkerId, point_ids: pointIds };
+    return dispatchPoints(payload);
   },
   workerTasks(worker) {
     return requestApi(`/api/worker-tasks?worker=${encodeURIComponent(worker)}`);

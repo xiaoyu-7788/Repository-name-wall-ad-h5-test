@@ -53,12 +53,22 @@ module.exports = async function handler(req, res) {
       .eq("id", pointId);
     if (pointError) throw pointError;
 
-    const { error: taskError } = await supabase
+    const taskDoneAt = nowIso();
+    const taskUpdate = await supabase
       .from("dispatch_tasks")
-      .update({ status: "已完成" })
+      .update({ status: "已完成", completed_at: taskDoneAt })
       .eq("point_id", pointId)
       .eq("worker_id", workerId);
-    if (taskError) throw taskError;
+    if (taskUpdate.error) {
+      const message = String(taskUpdate.error.message || "");
+      if (!/completed_at|schema cache|column/i.test(message)) throw taskUpdate.error;
+      const fallback = await supabase
+        .from("dispatch_tasks")
+        .update({ status: "已完成" })
+        .eq("point_id", pointId)
+        .eq("worker_id", workerId);
+      if (fallback.error) throw fallback.error;
+    }
 
     return sendJson(res, 200, { ok: true, url: publicUrl, path });
   } catch (error) {

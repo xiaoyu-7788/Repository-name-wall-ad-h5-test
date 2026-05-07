@@ -11,8 +11,8 @@ function uid(prefix = "id") {
 }
 
 const demoWorkers = [
-  { id: "w1", code: "zhang", name: "张师傅", phone: "13800000001", car_no: "粤A·工001", created_at: "2026-01-01T00:00:00.000Z" },
-  { id: "w2", code: "li", name: "李师傅", phone: "13800000002", car_no: "粤A·工002", created_at: "2026-01-01T00:00:00.000Z" },
+  { id: "w1", code: "zhang", worker_key: "zhang", slug: "zhang", name: "张师傅", phone: "13800000001", car_no: "粤A·工001", created_at: "2026-01-01T00:00:00.000Z" },
+  { id: "w2", code: "li", worker_key: "li", slug: "li", name: "李师傅", phone: "13800000002", car_no: "粤A·工002", created_at: "2026-01-01T00:00:00.000Z" },
 ];
 
 const demoPoints = [
@@ -166,8 +166,14 @@ async function ensureDemoData(supabase) {
   const pointIds = demoPoints.map((point) => point.id);
   await supabase.from("point_photos").delete().in("point_id", pointIds);
   await supabase.from("dispatch_tasks").delete().in("point_id", pointIds);
-  const { error: workersError } = await supabase.from("workers").upsert(demoWorkers, { onConflict: "id" });
-  if (workersError) throw workersError;
+  const workersResult = await supabase.from("workers").upsert(demoWorkers, { onConflict: "id" });
+  if (workersResult.error) {
+    const message = String(workersResult.error.message || "");
+    if (!/worker_key|slug|schema cache|column/i.test(message)) throw workersResult.error;
+    const fallbackWorkers = demoWorkers.map(({ worker_key, slug, ...worker }) => worker);
+    const fallback = await supabase.from("workers").upsert(fallbackWorkers, { onConflict: "id" });
+    if (fallback.error) throw fallback.error;
+  }
   const { error: pointsError } = await supabase.from("wall_points").upsert(
     demoPoints.map((point) => ({ ...point, updated_at: nowIso(), completed_at: null })),
     { onConflict: "id" },

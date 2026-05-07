@@ -1,4 +1,5 @@
 const fs = require("node:fs");
+const Module = require("node:module");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
 const diagnoseHandler = require("../../api/diagnose.js");
@@ -35,6 +36,66 @@ function invokeApi(handler, { method = "GET", query = {}, body = undefined } = {
     };
     Promise.resolve(handler(req, res)).catch((error) => resolve({ status: 500, body: { ok: false, detail: error.message } }));
   });
+}
+
+function loadDispatchWithSupabase(fakeSupabase) {
+  const dispatchPath = path.resolve(__dirname, "..", "..", "api", "dispatch.js");
+  const sharedPath = path.resolve(__dirname, "..", "..", "api", "_shared.js");
+  const realShared = require(sharedPath);
+  delete require.cache[dispatchPath];
+  const originalLoad = Module._load;
+  Module._load = function patchedLoad(request, parent, isMain) {
+    if (parent?.filename === dispatchPath && request === "./_shared") {
+      return { ...realShared, requireSupabase: () => fakeSupabase };
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+  try {
+    return require(dispatchPath);
+  } finally {
+    Module._load = originalLoad;
+  }
+}
+
+function createDispatchSupabaseMock() {
+  const calls = { insertedTasks: [], pointUpdate: null };
+  const workers = [
+    { id: "w1", code: "zhang", name: "张师傅", car_no: "粤A·工001" },
+    { id: "w2", code: "li", name: "李师傅", car_no: "粤A·工002" },
+  ];
+  const fakeSupabase = {
+    from(table) {
+      if (table === "workers") {
+        return {
+          select: () => ({ order: async () => ({ data: workers, error: null }) }),
+        };
+      }
+      if (table === "dispatch_tasks") {
+        return {
+          select: () => ({ eq() { return this; }, in: async () => ({ data: [], error: null }) }),
+          delete: () => ({ in: async () => ({ data: [], error: null }) }),
+          insert(tasks) {
+            calls.insertedTasks = tasks;
+            return { select: async () => ({ data: tasks, error: null }) };
+          },
+        };
+      }
+      if (table === "wall_points") {
+        return {
+          update(payload) {
+            calls.pointUpdate = payload;
+            return {
+              in(_column, ids) {
+                return { select: async () => ({ data: ids.map((id) => ({ id })), error: null }) };
+              },
+            };
+          },
+        };
+      }
+      return {};
+    },
+  };
+  return { fakeSupabase, calls };
 }
 
 async function openAdmin(page) {
@@ -184,5 +245,36 @@ test.describe("墙体广告执行 H5 派单系统", () => {
     expect(response.body.ok).toBe(false);
     expect(response.body.checks.some((check) => check.name === "SUPABASE_URL")).toBeTruthy();
     expect(response.body.checks.some((check) => check.name === "SUPABASE_SERVICE_ROLE_KEY")).toBeTruthy();
+  });
+
+  test("测试 10：/api/dispatch 写入施工中任务并更新点位", async () => {
+    const { fakeSupabase, calls } = createDispatchSupabaseMock();
+    const dispatchHandler = loadDispatchWithSupabase(fakeSupabase);
+    const response = await invokeApi(dispatchHandler, {
+      method: "POST",
+      body: { worker_id: "w2", worker_key: "li", point_ids: ["p1", 2] },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.ok).toBe(true);
+    expect(response.body.worker.id).toBe("w2");
+    expect(response.body.inserted).toBe(2);
+    expect(response.body.updated_points).toBe(2);
+    expect(calls.insertedTasks).toHaveLength(2);
+    expect(calls.insertedTasks.every((task) => task.worker_id === "w2" && task.status === "施工中" && task.assigned_at)).toBeTruthy();
+    expect(calls.pointUpdate.status).toBe("施工中");
+  });
+
+  test("测试 11：前端派单按钮不再使用 Canvas 本地跳转逻辑", async () => {
+    const appSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "App.jsx"), "utf8");
+    const apiClientSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "apiClient.js"), "utf8");
+
+    expect(appSource).not.toContain("setWorkerPointTasks");
+    expect(appSource).not.toContain("setActiveMobileWorkerId");
+    expect(appSource).not.toContain('setAppView("mobile")');
+    expect(appSource).toContain("dispatchPointsApi(requestPayload)");
+    expect(appSource).toContain('url: "/api/dispatch"');
+    expect(apiClientSource).toContain("export async function dispatchPoints");
+    expect(apiClientSource).toContain('requestApi("/api/dispatch"');
   });
 });

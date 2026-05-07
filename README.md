@@ -259,3 +259,32 @@ vercel build
 - 后端视频转码
 - 图片水印 OCR 自动识别地址
 - 操作日志、定位轨迹、停车计时
+
+---
+
+## 八、真实派单链路
+
+线上代理模式下，后台“发送已选点位到师傅移动端”必须请求本站 API，不再使用 Canvas 本地跳转模拟。
+
+后台请求：
+
+```json
+{
+  "worker_id": "w2",
+  "worker_key": "li",
+  "worker_name": "李师傅",
+  "worker_phone": "13800000002",
+  "point_ids": ["p1", "p2"]
+}
+```
+
+处理流程：
+
+1. 前端调用 `POST /api/dispatch`。
+2. `/api/dispatch` 根据 `worker_id`、`worker_key`、`worker_name`、`worker_phone` 查找师傅。
+3. 后端写入 `dispatch_tasks`，任务状态为“施工中”。
+4. 后端同步更新 `wall_points.status = 施工中`。
+5. 手机端访问 `/worker?worker=li` 时调用 `GET /api/worker-tasks?worker=li` 读取真实派单任务。
+6. 手机端上传照片/视频时调用 `POST /api/upload`，写入 Storage 和 `point_photos`，并把点位状态改为“已完成”。
+
+如果线上仍提示派单失败，请打开 Vercel 项目后台，进入 `Functions -> Logs`，筛选 `/api/dispatch`，查看返回的 `stage`、`message`、`details`。后台页面也会在“派单调试信息”里显示请求地址、payload、HTTP status 和后端响应，便于截图排查。

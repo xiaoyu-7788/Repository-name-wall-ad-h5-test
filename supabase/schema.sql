@@ -6,6 +6,8 @@ create extension if not exists "uuid-ossp";
 create table if not exists workers (
   id text primary key,
   code text unique not null,
+  worker_key text,
+  slug text,
   name text not null,
   phone text,
   car_no text,
@@ -32,9 +34,16 @@ create table if not exists dispatch_tasks (
   id text primary key,
   worker_id text references workers(id) on delete cascade,
   point_id text references wall_points(id) on delete cascade,
-  status text default '已派发',
+  status text default '施工中',
+  assigned_at timestamptz default now(),
+  completed_at timestamptz,
   created_at timestamptz default now()
 );
+
+alter table workers add column if not exists worker_key text;
+alter table workers add column if not exists slug text;
+alter table dispatch_tasks add column if not exists assigned_at timestamptz default now();
+alter table dispatch_tasks add column if not exists completed_at timestamptz;
 
 create table if not exists point_photos (
   id text primary key,

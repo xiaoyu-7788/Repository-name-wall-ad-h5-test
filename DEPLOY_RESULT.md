@@ -146,3 +146,22 @@ C:\Users\wangs\AppData\Roaming\npm\vercel.cmd whoami
 10. 上传一张现场照片。
 11. 回后台刷新。
 12. 确认点位状态变为 `已完成`，照片/视频数量增加。
+
+## 真实派单链路修复结果
+
+更新时间：2026-05-07。
+
+当前状态：
+
+- 已修复后台派单按钮：`VITE_DATA_MODE=proxy` 时会调用 `POST /api/dispatch`，不再跳转到 Canvas 本地 mobile 模拟页。
+- `/api/dispatch` 已返回详细 `stage`、`message`、`details`，并把 `dispatch_tasks.status` 与 `wall_points.status` 写为“施工中”。
+- `/api/worker-tasks?worker=li` 已兼容 `id`、`code`、`worker_key`、`slug`、`phone`、姓名和车牌尾号查询，手机端可读取真实派单任务。
+- 后台派单模块下方已有“派单调试信息”，线上失败时可直接截图给开发定位。
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，11 passed。
+
+上线动作：
+
+- 本次代码推送到 GitHub 后，需要在 Vercel 对当前项目执行 Redeploy，生产环境才会使用新的 `/api/dispatch` 和前端按钮逻辑。
+- 如果 Redeploy 后仍失败，请进入 Vercel `Functions -> Logs`，筛选 `/api/dispatch`，查看 `stage/message/details`。
+- 不需要把任何真实密钥发到聊天里；只需要确认 Vercel Environment Variables 已配置 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`。

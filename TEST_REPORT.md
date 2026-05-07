@@ -542,3 +542,51 @@ Vercel 需要新增或确认的变量：
 - `SUPABASE_SERVICE_ROLE_KEY`
 
 `SUPABASE_SERVICE_ROLE_KEY` 在 Supabase Project Settings -> API 中查看，只允许填到 Vercel Environment Variables，只允许 Serverless API 读取。
+
+## 16. 真实派单链路专项修复
+
+更新时间：2026-05-07。
+
+修改文件列表：
+
+- `src/App.jsx`
+- `src/apiClient.js`
+- `src/styles.css`
+- `api/dispatch.js`
+- `api/worker-tasks.js`
+- `api/upload.js`
+- `api/_shared.js`
+- `supabase/schema.sql`
+- `tests/e2e/app.spec.js`
+- `README.md`
+- `TEST_REPORT.md`
+- `DEPLOY_RESULT.md`
+
+修复内容：
+
+- 已确认 `src/App.jsx` 不再包含 `setWorkerPointTasks`、`setActiveMobileWorkerId`、`setAppView("mobile")` 本地 Canvas 跳转派单逻辑。
+- 后台“发送已选点位到师傅移动端”在 `VITE_DATA_MODE=proxy` 时会调用 `dispatchPointsApi(requestPayload)`，并请求 `POST /api/dispatch`。
+- 前端派单 payload 统一为 `worker_id`、`worker_key`、`worker_name`、`worker_phone`、`point_ids`。
+- 派单成功后刷新后台数据，显示“已成功发送 X 个点位给 XX师傅”，并保留“打开该师傅移动端”链接。
+- 派单失败时页面显示“派单调试信息”，包含 `/api/dispatch`、payload、HTTP status、response、stage、message、details。
+- `/api/dispatch` 已支持查找 worker、清理重复任务、写入 `dispatch_tasks.status = 施工中`、更新 `wall_points.status = 施工中`，失败时返回明确 `stage/message/details`。
+- `/api/worker-tasks?worker=li` 已兼容 `id`、`code`、`worker_key`、`slug`、`phone`、姓名包含“李”、车牌包含“工002”等查询方式。
+
+本轮执行过的命令：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，11 passed。
+- 新增测试覆盖 `/api/dispatch` 写入“施工中”任务、更新点位状态，以及前端源码不再包含 Canvas 本地跳转派单关键字。
+
+线上排查建议：
+
+- 如果 Vercel 重新部署后仍派单失败，请进入 Vercel 项目 `Functions -> Logs`，筛选 `/api/dispatch`。
+- 对照后台“派单调试信息”中的 payload、HTTP status、stage、message、details 排查 Supabase 表字段、数据或权限问题。
+- 本轮没有打印、提交或写入 `.env` 真实密钥。

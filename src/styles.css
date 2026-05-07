@@ -466,6 +466,33 @@ textarea {
   color: #92400e;
 }
 
+.open-worker-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #0f172a;
+  background: #fff;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.info summary {
+  cursor: pointer;
+}
+
+.info pre {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .project-grid,
 .site-grid,
 .track-grid,
