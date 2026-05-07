@@ -672,3 +672,60 @@ npm run test:e2e
 
 - `npm run build`：通过。
 - `npm run test:e2e`：通过，14 passed。
+
+## 19. 国内接口版改造
+
+更新时间：2026-05-07。
+
+当前主线已从 Supabase / Vercel API 代理切换为国内后端接口适配版。
+
+新增文件：
+
+- `server/index.js`
+- `server/test-api.js`
+- `server/data/db.json`
+- `server/uploads/.gitkeep`
+- `DOMESTIC_API_DEPLOY.md`
+
+主要修改：
+
+- `src/apiClient.js` 重写为统一数据访问层，支持 `local`、`mock-server`、`production-api`。
+- `src/supabaseClient.js` 改为兼容环境变量出口，不再创建 Supabase client。
+- `src/App.jsx` 默认显示“接口诊断”和国内 API 数据模式，不再提示用户配置 Supabase。
+- `package.json` 新增 `dev:api`、`dev:all`、`test:api`。
+- `.env.example` 改为国内接口变量：`VITE_DATA_MODE`、`VITE_API_BASE_URL`、高德变量、Kimi 后端代理变量。
+- `README.md` 改为国内接口版说明。
+- `tests/e2e/app.spec.js` 更新为国内接口诊断与本地演示流程。
+
+Mock Server 接口覆盖：
+
+- projects
+- workers
+- wall-points
+- dispatch
+- worker-tasks
+- point-media
+- complete-point
+- track-logs
+- import-demo / reset-demo
+
+执行过的命令：
+
+```bash
+npm install express cors multer concurrently
+npm uninstall @supabase/supabase-js
+npm run build
+npm run test:api
+npm run test:e2e
+```
+
+结果：
+
+- `npm run build`：通过。
+- `npm run test:api`：通过。
+- `npm run test:e2e`：通过，10 passed。
+
+说明：
+
+- 旧 `supabase/schema.sql` 和历史 Vercel API 文件仍保留作为参考，但当前前端主线不再调用 Supabase。
+- `api/_shared.js` 已改为可选 Supabase SDK，不安装 Supabase SDK 时不会影响国内接口版构建和运行。

@@ -1,4 +1,9 @@
-const { createClient } = require("@supabase/supabase-js");
+let createClient = null;
+try {
+  ({ createClient } = require("@supabase/supabase-js"));
+} catch {
+  createClient = null;
+}
 
 const STORAGE_BUCKET = "point-media";
 
@@ -115,13 +120,14 @@ function getSupabaseAdmin() {
     hasServiceRoleKey: Boolean(serviceRoleKey),
   };
 
-  if (!url || !serviceRoleKey) {
+  if (!url || !serviceRoleKey || !createClient) {
     return {
       env,
       client: null,
       missing: [
         !url ? "SUPABASE_URL" : "",
         !serviceRoleKey ? "SUPABASE_SERVICE_ROLE_KEY" : "",
+        !createClient ? "SUPABASE_CLIENT_DEP_DISABLED" : "",
       ].filter(Boolean),
     };
   }

@@ -1,0 +1,80 @@
+{
+  "projects": [
+    {
+      "id": "加多宝村镇墙体项目",
+      "name": "加多宝村镇墙体项目",
+      "created_at": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "阿康化肥春耕项目",
+      "name": "阿康化肥春耕项目",
+      "created_at": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "workers": [
+    {
+      "id": "w1",
+      "code": "zhang",
+      "worker_key": "zhang",
+      "slug": "zhang",
+      "name": "张师傅",
+      "phone": "13800000001",
+      "car_no": "粤A·工001",
+      "created_at": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "w2",
+      "code": "li",
+      "worker_key": "li",
+      "slug": "li",
+      "name": "李师傅",
+      "phone": "13800000002",
+      "car_no": "粤A·工002",
+      "created_at": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "wallPoints": [
+    {
+      "id": "p1",
+      "title": "GZ-BY-001",
+      "address": "广东省广州市白云区太和镇主干道路口",
+      "landlord_name": "黄先生",
+      "landlord_phone": "13531280287",
+      "k_code": "K-GZ-BY-001",
+      "project_name": "加多宝村镇墙体项目",
+      "status": "待施工",
+      "lng": 113.38431,
+      "lat": 23.30859,
+      "created_at": "2026-01-02T00:00:00.000Z"
+    },
+    {
+      "id": "p2",
+      "title": "FS-NH-002",
+      "address": "广东省佛山市南海区村口商业街",
+      "landlord_name": "陈先生",
+      "landlord_phone": "13800138000",
+      "k_code": "K-FS-NH-002",
+      "project_name": "加多宝村镇墙体项目",
+      "status": "待施工",
+      "lng": 113.14588,
+      "lat": 23.04712,
+      "created_at": "2026-01-03T00:00:00.000Z"
+    },
+    {
+      "id": "p3",
+      "title": "QY-YD-003",
+      "address": "广东省清远市英德市镇道转角",
+      "landlord_name": "林先生",
+      "landlord_phone": "13922223333",
+      "k_code": "K-QY-YD-003",
+      "project_name": "阿康化肥春耕项目",
+      "status": "待施工",
+      "lng": 113.41521,
+      "lat": 24.18677,
+      "created_at": "2026-01-04T00:00:00.000Z"
+    }
+  ],
+  "dispatchTasks": [],
+  "pointMedia": [],
+  "trackLogs": []
+}

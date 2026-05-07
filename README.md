@@ -1,296 +1,156 @@
-# 墙体广告执行 H5 测试版
+# 全国墙体广告执行派单系统 H5
 
-这是一个可以本地演示、也可以真实部署测试的 H5 工程：
+当前主线是“国内后端接口适配版”：
 
-- 电脑后台：筛选点位、全选/反选、派单给指定师傅
-- 师傅手机端：只看自己的点位、点击高德导航、上传照片/视频
-- 上传成功后：点位自动更新为“已完成”
-- 本地演示：不配置 Supabase 也能在同一浏览器完成后台派单、师傅页查看、上传后更新状态
-- 真实跨设备同步：Supabase 数据库和文件存储
-- 前端部署：Vercel / Netlify / 自己服务器均可
+- 电脑后台：高德地图执行台、项目管理、批量新增点位、标签筛选、点位编辑、派单。
+- 现场中心：现场查看中心、项目照片库、720全景、全景视频、水印图片、Kimi 图片分类、工人定位轨迹。
+- 师傅移动端：一页一个点位、查看地址和 K 码、打开高德查看/导航、上传照片/视频。
+- 上传成功后：点位自动变为“已完成”，后台刷新即可同步看到状态和媒体数量。
 
-当前后台已包含：
+## 数据模式
 
-- Supabase 连接诊断：检查环境变量、URL 格式、4 张表读写、RLS、Storage bucket
-- 高德地图执行台、标签筛选、放大筛选列表、点位编辑
-- 项目管理、批量新增点位、现场查看中心、项目照片库
-- 720全景、全景视频、水印图片、工人定位轨迹、Kimi图片分类
-- 地址自动匹配经纬度：需要配置 `VITE_AMAP_KEY`
-
----
-
-## 一、先准备 Supabase
-
-1. 注册并进入 Supabase。
-2. New Project 创建项目。
-3. 进入 SQL Editor。
-4. 打开 `supabase/schema.sql`，复制全部 SQL，粘贴运行。
-5. SQL 会自动创建 `point-media` Storage bucket，并添加测试期匿名读写策略。
-
-Supabase React 官方快速开始说明了如何创建项目并在 React 中查询数据；Storage 官方文档提供了 JS 上传文件的接口说明。
-
----
-
-## 二、配置环境变量
-
-复制 `.env.example` 为 `.env`：
-
-```bash
-cp .env.example .env
-```
-
-填写：
+通过 `.env.local` 配置：
 
 ```env
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
+VITE_DATA_MODE=local
+VITE_API_BASE_URL=http://localhost:8787
 VITE_AMAP_KEY=
 VITE_AMAP_SECURITY_CODE=
 VITE_KIMI_CLASSIFY_ENDPOINT=
-VITE_DATA_MODE=proxy
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-高德导航链接不需要把密钥写进代码。地址自动匹配经纬度会读取 `VITE_AMAP_KEY` 调用高德地理编码。
+支持三种模式：
 
-Kimi 图片分类不要把真实 Kimi API Key 放到前端；请放在后端接口里，然后把后端接口地址填到 `VITE_KIMI_CLASSIFY_ENDPOINT`。未配置时，系统会使用本地文件名规则分类。
+- `local`：浏览器 localStorage 演示模式，无后端也能跑。
+- `mock-server`：本项目内置 Express 国内接口，适合局域网真实手机测试。
+- `production-api`：前端调用 `VITE_API_BASE_URL` 指向的真实国内后端，后端可部署到腾讯云、阿里云、宝塔 Node 服务等。
 
-### Vercel API 代理模式
+当前主线不再要求配置 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`、`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`。
 
-线上真实手机测试建议使用代理模式：
+## 本地运行
 
-```env
-VITE_DATA_MODE=proxy
-```
-
-此时浏览器前端会优先请求本站 `/api/*`，再由 Vercel Serverless Function 访问 Supabase。这样即使手机或浏览器无法直连 Supabase，系统仍可通过 Vercel 后端代理工作。
-
-Vercel 需要配置两类环境变量：
-
-前端公开变量：
-
-```text
-VITE_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY
-VITE_AMAP_KEY
-VITE_AMAP_SECURITY_CODE
-VITE_DATA_MODE=proxy
-VITE_KIMI_CLASSIFY_ENDPOINT，可选
-```
-
-服务端私密变量：
-
-```text
-SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
-```
-
-`SUPABASE_SERVICE_ROLE_KEY` 在 Supabase Project Settings → API 里查看。这个 key 权限很高，绝对不能写到前端代码、README、报告、`.env.example` 的真实值、GitHub 仓库或聊天里，只允许填到 Vercel Project → Settings → Environment Variables，并且只允许 `/api/*` Serverless Function 读取。
-
----
-
-## 三、本地运行
+安装依赖：
 
 ```bash
 npm install
+```
+
+只跑前端本地演示：
+
+```bash
 npm run dev
 ```
 
-打开：
+启动国内 Mock API：
 
-```text
-http://localhost:5173
+```bash
+npm run dev:api
 ```
 
-师傅移动端测试：
+前后端一起启动：
 
-```text
-http://localhost:5173/worker?worker=zhang
-http://localhost:5173/worker?worker=li
+```bash
+npm run dev:all
 ```
 
-未配置 Supabase 时，系统会使用浏览器 localStorage 保存演示数据。你可以直接在后台点击“重置本地演示数据”，选择点位并派单，再打开师傅移动端链接查看任务。这个模式适合同一台电脑或同一浏览器演示。
+局域网测试建议使用：
 
-如果要让办公室电脑和真实手机跨设备同步，仍然需要按前两节配置 Supabase，并运行 `supabase/schema.sql`。
+```bash
+node server/index.js --host 0.0.0.0
+npm run dev -- --host 0.0.0.0
+```
 
-配置后进入后台“Supabase诊断”，点击“开始诊断”。诊断会明确区分：
+手机访问示例：
 
-- 网络失败
-- 环境变量错误
-- 表不存在
-- RLS权限问题
-- Storage bucket 不存在
-- Storage 权限问题
+```text
+http://电脑局域网IP:5173/worker/w1
+http://电脑局域网IP:5173/worker/w2
+```
 
----
+对应 `.env.local`：
 
-## 四、部署到 Vercel 真实手机测试
+```env
+VITE_DATA_MODE=mock-server
+VITE_API_BASE_URL=http://电脑局域网IP:8787
+```
 
-### 1. GitHub 上传方法：上传到 GitHub 私有仓库
+## 国内 Mock API
 
-1. 在 GitHub 新建一个 Private repository。
-2. 把本项目代码提交并推送到该仓库。
-3. 确认不要提交 `.env`、`.env.local`、`.env.*.local`。这些文件已经写入 `.gitignore`。
+后端目录：
 
-### 2. 在 Vercel 创建项目
+- `server/index.js`：Express REST API。
+- `server/data/db.json`：测试数据文件。
+- `server/uploads/`：照片/视频上传目录。
 
-1. 登录 Vercel。
-2. 点击 New Project。
-3. 选择刚才的 GitHub 私有仓库。
-4. Framework Preset 选择 Vite。
-5. Build Command 填：
+主要接口：
+
+- `GET /api/health`
+- `GET /api/projects`
+- `POST /api/projects`
+- `PUT /api/projects/:id`
+- `DELETE /api/projects/:id`
+- `GET /api/workers`
+- `POST /api/workers`
+- `PUT /api/workers/:id`
+- `GET /api/wall-points`
+- `POST /api/wall-points`
+- `PUT /api/wall-points/:id`
+- `DELETE /api/wall-points/:id`
+- `POST /api/dispatch`
+- `GET /api/worker-tasks/:workerId`
+- `POST /api/point-media/:pointId`
+- `POST /api/complete-point/:pointId`
+- `GET /api/track-logs`
+- `POST /api/track-logs`
+- `POST /api/import-demo`
+- `POST /api/reset-demo`
+
+统一返回：
+
+```json
+{ "ok": true, "data": {} }
+```
+
+或：
+
+```json
+{ "ok": false, "error": "错误原因" }
+```
+
+## 测试
 
 ```bash
 npm run build
+npm run test:api
+npm run test:e2e
 ```
 
-6. Output Directory 填：
+`test:api` 会自动验证：
 
-```text
-dist
-```
+- health 正常；
+- 写入演示数据；
+- 查询 workers；
+- 查询 wall-points；
+- 派单给 w1；
+- `/api/worker-tasks/w1` 能读到任务；
+- `complete-point` 能把点位改为“已完成”；
+- 再查 wall-points 确认状态已完成。
 
-### 3. 配置 Vercel 环境变量
+## 真实测试流程
 
-进入 Vercel 项目 Settings → Environment Variables，添加：
+1. 后台打开首页或 `/admin`。
+2. 点击“写入演示数据”。
+3. 选择 `李师傅 / 粤A·工002`。
+4. 勾选点位。
+5. 点击“发送已选点位到师傅移动端”。
+6. 手机打开 `/worker/w2` 或 `/worker?worker=w2`。
+7. 点击高德导航。
+8. 上传现场照片/视频。
+9. 回后台刷新。
+10. 确认点位状态变为“已完成”，媒体数量增加。
 
-```text
-VITE_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY
-VITE_AMAP_KEY
-VITE_AMAP_SECURITY_CODE
-VITE_DATA_MODE=proxy
-SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
-```
+## 部署
 
-可选：
+请看 [DOMESTIC_API_DEPLOY.md](./DOMESTIC_API_DEPLOY.md)。
 
-```text
-VITE_KIMI_CLASSIFY_ENDPOINT
-```
-
-`VITE_KIMI_CLASSIFY_ENDPOINT` 是后端 Kimi 图片分类接口地址。不要把 Kimi API Key、Supabase service_role、secret key 或高德密钥硬编码到前端代码里。
-
-### 4. 部署后后台和师傅移动端访问地址
-
-```text
-后台：https://你的域名.vercel.app/
-张师傅：https://你的域名.vercel.app/worker?worker=zhang
-李师傅：https://你的域名.vercel.app/worker?worker=li
-```
-
-项目已包含 `vercel.json`，会把所有路径 rewrite 到 `/`，避免刷新 `/worker?worker=li` 时 404。
-
-### 5. 真实手机测试流程
-
-1. 打开后台。
-2. 点击 Supabase诊断。
-3. 点击开始诊断，确认环境变量、表、RLS、Storage 都通过。
-4. 点击写入演示数据。
-5. 选择李师傅。
-6. 勾选点位。
-7. 点击发送已选点位到师傅移动端。
-8. 手机打开 `/worker?worker=li`。
-9. 上传照片。
-10. 回后台刷新。
-11. 确认点位状态变为“已完成”，照片/视频数量增加。
-
-### 6. Vercel CLI 可选用法
-
-当前机器如果没有安装 Vercel CLI，可以手动安装：
-
-```bash
-npm i -g vercel
-```
-
-登录：
-
-```bash
-vercel login
-```
-
-拉取项目配置并本地构建：
-
-```bash
-vercel pull
-vercel build
-```
-
-这些命令会使用 Vercel 项目的环境变量。不要把生成的 `.env.local` 提交到仓库。
-
----
-
-## 五、测试流程
-
-1. 打开电脑后台。
-2. 本地演示时点击“重置本地演示数据”；Supabase 模式下点击“写入演示数据”。
-3. 筛选点位。
-4. 全选/反选/单选。
-5. 选择张师傅或李师傅。
-6. 点击“发送已选点位到师傅移动端”。
-7. 把对应师傅链接发给手机。
-8. 手机端点“高德导航”。
-9. 到现场后上传照片/视频。
-10. 上传会写入 Storage 和 `point_photos`，点位状态自动变成“已完成”。
-
----
-
-## 六、当前是测试权限
-
-`schema.sql` 里为了方便你真实手机测试，RLS 是宽松测试策略：匿名可读写。
-
-正式上线必须改成：
-
-- 管理员登录后才能看全部点位
-- 张师傅只能看自己的派单
-- 李师傅只能看自己的派单
-- 照片/视频只能由对应人员上传
-- Kimi API Key 不能放前端，要放后端接口
-
----
-
-## 七、下一版建议
-
-- 登录系统：管理员 / 张师傅 / 李师傅
-- 后台项目管理、批量导入 Excel
-- 高德地图 JS 地图显示点位
-- 后端视频转码
-- 图片水印 OCR 自动识别地址
-- 操作日志、定位轨迹、停车计时
-
----
-
-## 八、真实派单链路
-
-线上代理模式下，后台“发送已选点位到师傅移动端”必须请求本站 API，不再使用 Canvas 本地跳转模拟。
-
-后台请求：
-
-```json
-{
-  "worker_id": "w2",
-  "worker_key": "li",
-  "worker_name": "李师傅",
-  "worker_phone": "13800000002",
-  "point_ids": ["p1", "p2"]
-}
-```
-
-处理流程：
-
-1. 前端调用 `POST /api/dispatch`。
-2. `/api/dispatch` 根据 `worker_id`、`worker_key`、`worker_name`、`worker_phone` 查找师傅。
-3. 后端写入 `dispatch_tasks`，任务状态为“施工中”。
-4. 后端同步更新 `wall_points.status = 施工中`。
-5. 手机端访问 `/worker?worker=li` 时调用 `GET /api/worker-tasks?worker=li` 读取真实派单任务。
-6. 手机端上传照片/视频时调用 `POST /api/upload`，写入 Storage 和 `point_photos`，并把点位状态改为“已完成”。
-
-如果线上仍提示派单失败，请打开 Vercel 项目后台，进入 `Functions -> Logs`，筛选 `/api/dispatch`，查看返回的 `stage`、`message`、`details`。后台页面也会在“派单调试信息”里显示请求地址、payload、HTTP status 和后端响应，便于截图排查。
-
-辅助调试：
-
-- 访问 `https://你的部署域名/api/debug-dispatch` 可以查看服务端是否读取到 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`、当前 Supabase host，以及 `workers`、`dispatch_tasks`、`wall_points` 的非敏感字段列表。
-- `/api/debug-dispatch` 不返回任何真实 key。
-- 如果 `/api/dispatch` 查询 `workers` 失败，但请求 payload 里带了 `worker_id`，后端会先使用该 `worker_id` 继续写入 `dispatch_tasks`，并在响应里返回 `worker_lookup_warning` 供排查。
+旧的 `supabase/schema.sql` 保留为历史参考，不再是当前默认运行方式。

@@ -1,9 +1,6 @@
 const fs = require("node:fs");
-const Module = require("node:module");
 const path = require("node:path");
 const { test, expect } = require("@playwright/test");
-const debugNetworkHandler = require("../../api/debug-network.js");
-const diagnoseHandler = require("../../api/diagnose.js");
 
 const STORE_KEY = "wall-ad-h5-demo-state";
 const fixtureDir = path.join(__dirname, "..", "fixtures");
@@ -37,78 +34,6 @@ function invokeApi(handler, { method = "GET", query = {}, body = undefined } = {
     };
     Promise.resolve(handler(req, res)).catch((error) => resolve({ status: 500, body: { ok: false, detail: error.message } }));
   });
-}
-
-function loadDispatchWithSupabase(fakeSupabase) {
-  const dispatchPath = path.resolve(__dirname, "..", "..", "api", "dispatch.js");
-  const sharedPath = path.resolve(__dirname, "..", "..", "api", "_shared.js");
-  const realShared = require(sharedPath);
-  delete require.cache[dispatchPath];
-  const originalLoad = Module._load;
-  Module._load = function patchedLoad(request, parent, isMain) {
-    if (parent?.filename === dispatchPath && request === "./_shared") {
-      return {
-        ...realShared,
-        getSupabaseAdmin: () => ({
-          env: { hasSupabaseUrl: true, hasServiceRoleKey: true },
-          client: fakeSupabase,
-          missing: [],
-        }),
-        getSafeSupabaseEnv: () => ({
-          has_SUPABASE_URL: true,
-          has_SUPABASE_SERVICE_ROLE_KEY: true,
-          supabase_host: "example.supabase.co",
-        }),
-      };
-    }
-    return originalLoad.call(this, request, parent, isMain);
-  };
-  try {
-    return require(dispatchPath);
-  } finally {
-    Module._load = originalLoad;
-  }
-}
-
-function createDispatchSupabaseMock() {
-  const calls = { insertedTasks: [], pointUpdate: null };
-  const workers = [
-    { id: "w1", code: "zhang", name: "张师傅", car_no: "粤A·工001" },
-    { id: "w2", code: "li", name: "李师傅", car_no: "粤A·工002" },
-  ];
-  const fakeSupabase = {
-    from(table) {
-      if (table === "workers") {
-        return {
-          select: () => ({ limit: async () => ({ data: workers, error: null }) }),
-        };
-      }
-      if (table === "dispatch_tasks") {
-        return {
-          select: () => ({ eq() { return this; }, in: async () => ({ data: [], error: null }) }),
-          delete: () => ({ eq() { return this; }, in: async () => ({ data: [], error: null }) }),
-          insert(tasks) {
-            calls.insertedTasks = tasks;
-            return { select: async () => ({ data: tasks, error: null }) };
-          },
-        };
-      }
-      if (table === "wall_points") {
-        return {
-          update(payload) {
-            calls.pointUpdate = payload;
-            return {
-              in(_column, ids) {
-                return { select: async () => ({ data: ids.map((id) => ({ id })), error: null }) };
-              },
-            };
-          },
-        };
-      }
-      return {};
-    },
-  };
-  return { fakeSupabase, calls };
 }
 
 async function openAdmin(page) {
@@ -148,9 +73,9 @@ test.describe("墙体广告执行 H5 派单系统", () => {
 
   test("测试 2：本地演示数据可用", async ({ page }) => {
     await openAdmin(page);
-    const localMode = await page.getByText(/本地演示模式|未配置 Supabase/).count();
+    const localMode = await page.getByText(/本地演示模式|本地演示数据/).count();
     if (localMode > 0) {
-      await expect(page.getByText(/本地演示模式|未配置 Supabase/).first()).toBeVisible();
+      await expect(page.getByText(/本地演示模式|本地演示数据/).first()).toBeVisible();
     }
     await page.getByRole("button", { name: /重置本地演示数据|写入演示数据/ }).click();
     await expect(page.locator(".list-panel .point-card")).toHaveCount(3);
@@ -226,107 +151,22 @@ test.describe("墙体广告执行 H5 派单系统", () => {
     await expect(title).toHaveText("GZ-BY-001");
   });
 
-  test("测试 8：Supabase 诊断", async ({ page }) => {
+  test("测试 8：国内接口诊断", async ({ page }) => {
     await openAdmin(page);
-    await page.getByRole("button", { name: "Supabase诊断" }).click();
-    await expect(page.getByText("Supabase 连接诊断")).toBeVisible();
+    await page.getByRole("button", { name: "接口诊断" }).click();
+    await expect(page.getByText("国内接口连接诊断")).toBeVisible();
     await page.getByRole("button", { name: "开始诊断" }).click();
 
-    await expect(page.locator(".env-grid").getByText("VITE_SUPABASE_URL", { exact: true })).toBeVisible();
-    await expect(page.locator(".env-grid").getByText("VITE_SUPABASE_ANON_KEY", { exact: true })).toBeVisible();
-    await expect(page.locator(".env-grid").getByText("URL 格式", { exact: true })).toBeVisible();
     await expect(page.locator(".env-grid").getByText("VITE_DATA_MODE", { exact: true })).toBeVisible();
-    await expect(page.getByText("前端直连 Supabase")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Vercel API 代理" })).toBeVisible();
-    await expect(page.getByText(/浏览器访问 Supabase|Vercel API 代理 -/).first()).toBeVisible();
-    await expect(page.getByText(/point-media/).first()).toBeVisible();
+    await expect(page.locator(".env-grid").getByText("VITE_API_BASE_URL", { exact: true })).toBeVisible();
+    await expect(page.getByText("数据模式与公开配置")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "国内后端接口" })).toBeVisible();
 
-    const unconfigured = await page.getByText(/Supabase 未配置|未读取|未配置/).count();
-    expect(unconfigured).toBeGreaterThan(0);
+    const modeText = await page.getByText(/本地模式|localStorage|接口/).count();
+    expect(modeText).toBeGreaterThan(0);
   });
 
-  test("测试 9：/api/diagnose 未配置时不崩溃", async () => {
-    const oldUrl = process.env.SUPABASE_URL;
-    const oldKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    delete process.env.SUPABASE_URL;
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const response = await invokeApi(diagnoseHandler);
-    if (oldUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = oldUrl;
-    if (oldKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = oldKey;
-
-    expect(response.status).toBe(200);
-    expect(response.body.ok).toBe(false);
-    expect(response.body.checks.some((check) => check.name === "SUPABASE_URL")).toBeTruthy();
-    expect(response.body.checks.some((check) => check.name === "SUPABASE_SERVICE_ROLE_KEY")).toBeTruthy();
-  });
-
-  test("测试 10：/api/dispatch 写入施工中任务并更新点位", async () => {
-    const { fakeSupabase, calls } = createDispatchSupabaseMock();
-    const dispatchHandler = loadDispatchWithSupabase(fakeSupabase);
-    const response = await invokeApi(dispatchHandler, {
-      method: "POST",
-      body: { worker_id: "w2", worker_key: "li", point_ids: ["p1", 2] },
-    });
-
-    expect(response.status).toBe(200);
-    expect(response.body.ok).toBe(true);
-    expect(response.body.worker.id).toBe("w2");
-    expect(response.body.inserted).toBe(2);
-    expect(response.body.updated_points).toBe(2);
-    expect(calls.insertedTasks).toHaveLength(2);
-    expect(calls.insertedTasks.every((task) => task.worker_id === "w2" && task.status === "施工中" && task.assigned_at)).toBeTruthy();
-    expect(calls.pointUpdate.status).toBe("施工中");
-  });
-
-  test("测试 11：/api/dispatch workers 查询失败时使用 worker_id 兜底", async () => {
-    const calls = { insertedTasks: [], pointUpdate: null };
-    const fakeSupabase = {
-      from(table) {
-        if (table === "workers") {
-          return {
-            select: () => ({ limit: async () => { throw new TypeError("fetch failed"); } }),
-          };
-        }
-        if (table === "dispatch_tasks") {
-          return {
-            delete: () => ({ eq() { return this; }, in: async () => ({ data: [], error: null }) }),
-            insert(tasks) {
-              calls.insertedTasks = tasks;
-              return { select: async () => ({ data: tasks, error: null }) };
-            },
-          };
-        }
-        if (table === "wall_points") {
-          return {
-            update(payload) {
-              calls.pointUpdate = payload;
-              return {
-                in(_column, ids) {
-                  return { select: async () => ({ data: ids.map((id) => ({ id })), error: null }) };
-                },
-              };
-            },
-          };
-        }
-        return {};
-      },
-    };
-    const dispatchHandler = loadDispatchWithSupabase(fakeSupabase);
-    const response = await invokeApi(dispatchHandler, {
-      method: "POST",
-      body: { worker_id: "w2", worker_name: "李师傅", worker_phone: "13800000002", point_ids: ["p1"] },
-    });
-
-    expect(response.status).toBe(200);
-    expect(response.body.ok).toBe(true);
-    expect(response.body.worker.id).toBe("w2");
-    expect(response.body.worker_lookup_warning.stage).toBe("find_worker");
-    expect(response.body.worker_lookup_warning.error_message).toContain("fetch failed");
-    expect(calls.insertedTasks[0].worker_id).toBe("w2");
-    expect(calls.pointUpdate.status).toBe("施工中");
-  });
-
-  test("测试 12：前端派单按钮不再使用 Canvas 本地跳转逻辑", async () => {
+  test("测试 9：前端派单按钮不再使用 Canvas 本地跳转逻辑", async () => {
     const appSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "App.jsx"), "utf8");
     const apiClientSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "apiClient.js"), "utf8");
 
@@ -334,12 +174,12 @@ test.describe("墙体广告执行 H5 派单系统", () => {
     expect(appSource).not.toContain("setActiveMobileWorkerId");
     expect(appSource).not.toContain('setAppView("mobile")');
     expect(appSource).toContain("dispatchPointsApi(requestPayload)");
-    expect(appSource).toContain('url: "/api/dispatch"');
     expect(apiClientSource).toContain("export async function dispatchPoints");
     expect(apiClientSource).toContain('requestApi("/api/dispatch"');
+    expect(apiClientSource).toContain("VITE_API_BASE_URL");
   });
 
-  test("测试 13：Vercel 不把 /api 路由重写到前端", async () => {
+  test("测试 10：Vercel 不把 /api 路由重写到前端", async () => {
     const vercelConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "..", "vercel.json"), "utf8"));
     expect(vercelConfig.rewrites).toEqual([
       {
@@ -349,20 +189,4 @@ test.describe("墙体广告执行 H5 派单系统", () => {
     ]);
   });
 
-  test("测试 14：/api/debug-network 返回 JSON 结构", async () => {
-    const oldUrl = process.env.SUPABASE_URL;
-    const oldKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    delete process.env.SUPABASE_URL;
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const response = await invokeApi(debugNetworkHandler);
-    if (oldUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = oldUrl;
-    if (oldKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = oldKey;
-
-    expect(response.status).toBe(200);
-    expect(response.headers["Content-Type"]).toContain("application/json");
-    expect(response.body).toHaveProperty("ok");
-    expect(response.body).toHaveProperty("env");
-    expect(response.body).toHaveProperty("tests");
-    expect(response.body.tests.some((item) => item.name === "SUPABASE_REST_REACHABLE")).toBeTruthy();
-  });
 });

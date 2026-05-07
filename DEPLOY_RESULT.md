@@ -207,3 +207,40 @@ https://你的部署域名/api/debug-network
 https://你的部署域名/api/debug-dispatch
 https://你的部署域名/worker?worker=li
 ```
+
+## 国内接口版结果
+
+更新时间：2026-05-07。
+
+当前状态：
+
+- 主线已改为国内接口版，不再要求 Supabase 环境变量。
+- 前端支持 `local`、`mock-server`、`production-api` 三种数据模式。
+- 已新增 Express Mock Server：`server/index.js`。
+- 数据文件：`server/data/db.json`。
+- 上传目录：`server/uploads/`。
+- 部署文档：`DOMESTIC_API_DEPLOY.md`。
+- `npm run build`：通过。
+- `npm run test:api`：通过。
+- `npm run test:e2e`：通过，10 passed。
+
+本地局域网测试：
+
+```bash
+node server/index.js --host 0.0.0.0
+npm run dev -- --host 0.0.0.0
+```
+
+`.env.local`：
+
+```env
+VITE_DATA_MODE=mock-server
+VITE_API_BASE_URL=http://电脑局域网IP:8787
+```
+
+手机端：
+
+```text
+http://电脑局域网IP:5173/worker/w1
+http://电脑局域网IP:5173/worker/w2
+```
