@@ -1,6 +1,7 @@
 const cors = require("cors");
 const express = require("express");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const multer = require("multer");
 
@@ -284,16 +285,24 @@ function createApp() {
   return app;
 }
 
+function getLanIps() {
+  return Object.values(os.networkInterfaces())
+    .flat()
+    .filter((item) => item && item.family === "IPv4" && !item.internal)
+    .map((item) => item.address);
+}
+
 if (require.main === module) {
-  const portArg = process.argv.find((arg) => arg.startsWith("--port="));
-  const hostArg = process.argv.find((arg) => arg.startsWith("--host="));
-  const hostFlagIndex = process.argv.indexOf("--host");
-  const portFlagIndex = process.argv.indexOf("--port");
-  const port = Number(portArg?.split("=")[1] || process.env.PORT || 8787);
-  const host = hostArg?.split("=")[1] || (hostFlagIndex >= 0 ? process.argv[hostFlagIndex + 1] : "") || process.env.HOST || "127.0.0.1";
-  const finalPort = Number(portFlagIndex >= 0 ? process.argv[portFlagIndex + 1] : port);
-  createApp().listen(finalPort, host, () => {
-    console.log(`Domestic mock API listening on http://${host}:${finalPort}`);
+  const PORT = Number(process.env.PORT || 8787);
+  const HOST = "0.0.0.0";
+  const app = createApp();
+
+  app.listen(PORT, HOST, () => {
+    console.log(`Mock API server running on http://${HOST}:${PORT}`);
+    console.log(`Local health: http://localhost:${PORT}/api/health`);
+    getLanIps().forEach((ip) => {
+      console.log(`LAN health: http://${ip}:${PORT}/api/health`);
+    });
   });
 }
 

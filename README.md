@@ -154,3 +154,49 @@ npm run test:e2e
 请看 [DOMESTIC_API_DEPLOY.md](./DOMESTIC_API_DEPLOY.md)。
 
 旧的 `supabase/schema.sql` 保留为历史参考，不再是当前默认运行方式。
+
+## 本地局域网真机测试
+
+本地真机测试需要同时启动两个服务。
+
+窗口 1：启动国内 Mock API。
+
+```bash
+npm run dev:api
+```
+
+窗口 2：启动 Vite 前端，并允许局域网访问。
+
+```bash
+npm run dev -- --host 0.0.0.0
+```
+
+启动后，把 `.env.local` 配成局域网 API 地址：
+
+```env
+VITE_DATA_MODE=mock-server
+VITE_API_BASE_URL=http://电脑局域网IP:8787
+```
+
+访问地址：
+
+```text
+电脑后台：
+http://电脑局域网IP:5173/admin
+
+张师傅移动端：
+http://电脑局域网IP:5173/worker/w1
+
+李师傅移动端：
+http://电脑局域网IP:5173/worker/w2
+
+后端健康检查：
+http://电脑局域网IP:8787/api/health
+```
+
+如果 `http://localhost:8787/api/health` 成功，但 `http://电脑局域网IP:8787/api/health` 失败，通常是 Windows 防火墙拦截。请用管理员 PowerShell 放行端口：
+
+```powershell
+netsh advfirewall firewall add rule name="WallAd API 8787" dir=in action=allow protocol=TCP localport=8787
+netsh advfirewall firewall add rule name="WallAd Vite 5173" dir=in action=allow protocol=TCP localport=5173
+```
