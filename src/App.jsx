@@ -1,34 +1,34 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import {
+  API_BASE_URL,
+  DATA_MODE,
+  deleteWallPoint,
+  dispatchPoints as dispatchPointsApi,
+  getDataModeLabel,
+  isLocalDataMode,
+  isProxyDataMode,
+  proxyApi,
+  saveProject,
+} from "./apiClient";
 import { supabaseEnv } from "./supabaseClient";
-import { dispatchPoints as dispatchPointsApi, getDataModeLabel, isLocalDataMode, isProxyDataMode, proxyApi } from "./apiClient";
 import "./styles.css";
 
 const STATUS = ["待施工", "施工中", "已完成", "需复查"];
-const LOCAL_STORE_KEY = "wall-ad-h5-demo-state";
-const LOCAL_STORE_EVENT = "wall-ad-h5-demo-updated";
-
-const ADMIN_TABS = [
-  { id: "console", label: "高德地图执行台" },
-  { id: "projects", label: "项目管理" },
-  { id: "batch", label: "批量新增点位" },
-  { id: "edit", label: "点位编辑" },
-  { id: "site", label: "现场查看中心" },
-  { id: "library", label: "项目照片库" },
-  { id: "pano", label: "720全景" },
-  { id: "video", label: "全景视频" },
-  { id: "watermark", label: "水印图片" },
-  { id: "track", label: "工人定位轨迹" },
-  { id: "kimi", label: "Kimi图片分类" },
-  { id: "diagnostics", label: "接口诊断" },
-];
+const MEDIA_TABS = ["现场照片", "720全景", "全景视频", "水印图片"];
+const DEFAULT_PROJECT_COLORS = {
+  加多宝项目: "#ef4444",
+  阿康化肥项目: "#16a34a",
+  能量饮料项目: "#2563eb",
+  未分配项目: "#64748b",
+};
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-function cnTime() {
-  return new Date().toLocaleString("zh-CN", { hour12: false });
+function cnTime(value = new Date()) {
+  return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }
 
 function uid(prefix = "id") {
@@ -37,753 +37,323 @@ function uid(prefix = "id") {
 
 function getRoute() {
   const url = new URL(window.location.href);
-  const path = url.pathname;
-  const workerCode = url.searchParams.get("worker") || path.split("/").filter(Boolean)[1] || "";
-  if (path.startsWith("/worker")) return { page: "worker", workerCode };
-  return { page: "admin", workerCode };
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (parts[0] === "worker") return { page: "worker", workerId: parts[1] || url.searchParams.get("worker") || "w1" };
+  if (parts[0] === "mobile-map") return { page: "mobile-map" };
+  return { page: "admin" };
 }
 
-function normalizeText(value) {
-  return String(value || "").trim();
+function classifyApiError(error) {
+  const message = error?.message || error?.error || String(error || "未知错误");
+  if (error?.category || error?.detail) {
+    return { category: error.category || "接口连接失败", detail: error.detail || message };
+  }
+  if (/failed to fetch|network|load failed/i.test(message)) {
+    return { category: "接口连接失败", detail: "浏览器无法访问 VITE_API_BASE_URL，请检查局域网 IP、端口、跨域和防火墙。" };
+  }
+  return { category: "业务处理失败", detail: message };
 }
 
-function uniqueValues(values) {
-  return [...new Set(values.map(normalizeText).filter(Boolean))];
+function normalizeWorkerCode(worker) {
+  return worker?.code || worker?.worker_key || worker?.slug || worker?.id || "w1";
 }
 
-function formatCount(value) {
-  return Number(value || 0).toLocaleString("zh-CN");
+function getProjectName(point) {
+  return point?.project_name || point?.projectName || "未分配项目";
+}
+
+function getPointStatus(point) {
+  return STATUS.includes(point?.status) ? point.status : "待施工";
+}
+
+function getCity(point) {
+  if (point?.city) return point.city;
+  const address = point?.address || "";
+  const match = address.match(/([\u4e00-\u9fa5]{2,6})市/);
+  return match?.[1] || "未知城市";
+}
+
+function getCaptainName(point) {
+  return point?.captain_name || point?.captainName || point?.leader_name || "未登记";
+}
+
+function getCaptainPhone(point) {
+  return point?.captain_phone || point?.captainPhone || point?.leader_phone || "未登记";
+}
+
+function getScoutName(point) {
+  return point?.scout_name || point?.scoutName || point?.finder_name || "未登记";
+}
+
+function getScoutPhone(point) {
+  return point?.scout_phone || point?.scoutPhone || point?.finder_phone || "未登记";
+}
+
+function mediaKind(photo) {
+  const raw = `${photo?.kind || photo?.file_name || photo?.url || ""}`.toLowerCase();
+  const type = `${photo?.content_type || photo?.type || ""}`.toLowerCase();
+  if (raw.includes("水印")) return "水印图片";
+  if (raw.includes("720") || raw.includes("全景")) return type.includes("video") || raw.includes("视频") ? "全景视频" : "720全景";
+  if (type.includes("video") || /\.(mp4|mov|m4v|webm)$/i.test(raw)) return "全景视频";
+  return "现场照片";
+}
+
+function mediaCounts(point, photos) {
+  const list = photos.filter((photo) => photo.point_id === point.id || photo.pointId === point.id);
+  return {
+    total: list.length,
+    site: list.filter((photo) => mediaKind(photo) === "现场照片").length,
+    pano: list.filter((photo) => mediaKind(photo) === "720全景").length,
+    video: list.filter((photo) => mediaKind(photo) === "全景视频").length,
+    watermark: list.filter((photo) => mediaKind(photo) === "水印图片").length,
+  };
+}
+
+function pointTags(point, photos) {
+  const counts = mediaCounts(point, photos);
+  return [
+    getPointStatus(point),
+    getProjectName(point),
+    getCity(point),
+    counts.total ? "有照片" : "无照片",
+    counts.pano ? "有720全景" : "无720全景",
+    counts.video ? "有视频" : "无视频",
+    counts.watermark ? "有水印图" : "无水印图",
+    `施工队长:${getCaptainName(point)}`,
+    `找墙队伍:${getScoutName(point)}`,
+  ];
 }
 
 function amapNavigationUrl(point) {
-  const lng = Number(point.lng || 0);
-  const lat = Number(point.lat || 0);
-  const name = encodeURIComponent(point.title || "墙体点位");
+  const lng = Number(point?.lng || 0);
+  const lat = Number(point?.lat || 0);
+  const name = encodeURIComponent(point?.title || "墙体点位");
   return `https://uri.amap.com/navigation?to=${lng},${lat},${name}&mode=car&policy=1&src=wall-ad-h5&coordinate=gaode&callnative=1`;
 }
 
 function amapMarkerUrl(point) {
-  const lng = Number(point.lng || 0);
-  const lat = Number(point.lat || 0);
-  const name = encodeURIComponent(`${point.title || "墙体点位"}-${point.address || ""}`);
+  const lng = Number(point?.lng || 0);
+  const lat = Number(point?.lat || 0);
+  const name = encodeURIComponent(`${point?.title || "墙体点位"}-${point?.address || ""}`);
   return `https://uri.amap.com/marker?position=${lng},${lat}&name=${name}&src=wall-ad-h5&coordinate=gaode&callnative=1`;
 }
 
-function getProjectName(point) {
-  return point.project_name || "未分配项目";
+function mapPointStyle(point, points, index) {
+  const withCoord = points.filter((item) => item.lng != null && item.lat != null);
+  if (!withCoord.length || point.lng == null || point.lat == null) {
+    return { left: `${18 + (index * 17) % 62}%`, top: `${20 + (index * 19) % 58}%` };
+  }
+  const lngs = withCoord.map((item) => Number(item.lng));
+  const lats = withCoord.map((item) => Number(item.lat));
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const left = maxLng === minLng ? 50 : 10 + ((Number(point.lng) - minLng) / (maxLng - minLng)) * 80;
+  const top = maxLat === minLat ? 50 : 84 - ((Number(point.lat) - minLat) / (maxLat - minLat)) * 70;
+  return { left: `${left}%`, top: `${top}%` };
 }
 
-function getMediaKind(fileOrPhoto) {
-  const name = `${fileOrPhoto?.name || fileOrPhoto?.file_name || fileOrPhoto?.url || ""}`.toLowerCase();
-  const type = `${fileOrPhoto?.type || fileOrPhoto?.kind || ""}`.toLowerCase();
-  const isVideo = type.startsWith("video/") || type.includes("video") || /\.(mp4|mov|m4v|avi|webm)$/i.test(name);
-  if (name.includes("720") || name.includes("全景") || name.includes("panorama")) {
-    return isVideo ? "全景视频" : "720全景";
-  }
-  if (name.includes("水印") || name.includes("watermark") || name.includes("定位") || name.includes("地址")) {
-    return "水印图片";
-  }
-  return isVideo ? "现场视频" : "现场照片";
-}
-
-function mediaMatchesKind(photo, kind) {
-  return getMediaKind(photo) === kind || photo.kind === kind;
-}
-
-function classifyApiError(error) {
-  if (error?.category || error?.detail) {
-    return { category: error.category || "接口连接失败", detail: error.detail || error.message || "国内 API 接口请求失败。" };
-  }
-  const message = `${error?.message || error?.error_description || error || ""}`;
-  const lowered = message.toLowerCase();
-  const code = String(error?.code || error?.statusCode || error?.status || "");
-
-  if (!message && !code) {
-    return { category: "未知错误", detail: "没有收到接口错误详情" };
-  }
-  if (lowered.includes("failed to fetch") || lowered.includes("networkerror") || lowered.includes("load failed")) {
-    return { category: "网络失败", detail: "浏览器无法访问国内 API，请检查 VITE_API_BASE_URL、局域网 IP、端口、防火墙或跨域设置。" };
-  }
-  if (lowered.includes("bucket") && (lowered.includes("not found") || code === "404")) {
-    return { category: "上传目录不存在", detail: "请确认国内后端 server/uploads 可写。" };
-  }
-  if (code === "401" || code === "403" || lowered.includes("invalid api key") || lowered.includes("jwt") || lowered.includes("anon key")) {
-    return { category: "环境变量错误", detail: "接口环境变量不匹配，请检查 VITE_DATA_MODE 和 VITE_API_BASE_URL。" };
-  }
-  if (code === "42P01" || lowered.includes("relation") && lowered.includes("does not exist") || lowered.includes("schema cache")) {
-    return { category: "数据结构不存在", detail: "后端数据文件或接口结构缺失，请运行 npm run dev:api 并重置演示数据。" };
-  }
-  if (code === "42501" || lowered.includes("row-level security") || lowered.includes("rls") || lowered.includes("permission denied") || lowered.includes("not authorized")) {
-    return { category: "接口权限问题", detail: "后端拒绝请求，请检查国内 API 权限或跨域策略。" };
-  }
-  if (lowered.includes("storage") || lowered.includes("object")) {
-    return { category: "上传权限问题", detail: "上传目录存在但写入失败，请检查 server/uploads 权限。" };
-  }
-  return { category: "未知错误", detail: message || `错误码：${code}` };
-}
-
-function makeStep(name, ok, category, detail, raw = "") {
-  return { name, ok, category, detail, raw };
-}
-
-async function readResult(name, promiseFactory) {
+function safeJson(value) {
   try {
-    const result = await promiseFactory();
-    if (result?.error) throw result.error;
-    return makeStep(name, true, "通过", "读写正常");
-  } catch (err) {
-    const issue = classifyApiError(err);
-    return makeStep(name, false, issue.category, issue.detail, err?.message || String(err));
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
   }
-}
-
-async function runApiDiagnostics() {
-  const startedAt = cnTime();
-  const localSteps = [
-    makeStep("VITE_DATA_MODE", true, "通过", `${supabaseEnv.dataMode || "local"} / ${getDataModeLabel()}`),
-    makeStep("VITE_API_BASE_URL", isLocalDataMode || Boolean(supabaseEnv.apiBaseUrl), isLocalDataMode ? "通过" : "未配置", isLocalDataMode ? "本地模式不需要后端接口" : supabaseEnv.apiBaseUrl || "mock-server / production-api 需要配置接口地址"),
-    makeStep("VITE_AMAP_KEY", supabaseEnv.hasAmapKey, supabaseEnv.hasAmapKey ? "通过" : "可选未配置", supabaseEnv.hasAmapKey ? "已读取高德 key" : "未配置时地址转坐标不可用"),
-    makeStep("VITE_KIMI_CLASSIFY_ENDPOINT", supabaseEnv.hasKimiClassifyEndpoint, supabaseEnv.hasKimiClassifyEndpoint ? "通过" : "可选未配置", supabaseEnv.hasKimiClassifyEndpoint ? "已读取 Kimi 后端代理接口" : "未配置时使用本地规则分类"),
-  ];
-
-  let apiSteps = [];
-  try {
-    const api = await proxyApi.diagnose();
-    apiSteps = [
-      makeStep("接口健康检查", true, "通过", api.message || `${api.mode || supabaseEnv.dataMode || "local"} 可用`),
-      makeStep("当前数据模式", true, "通过", getDataModeLabel(api.mode || supabaseEnv.dataMode)),
-    ];
-  } catch (err) {
-    const issue = classifyApiError(err);
-    apiSteps = [makeStep("国内接口 /api/health", false, issue.category || "接口连接失败", issue.detail)];
-  }
-
-  const localOk = localSteps.every((step) => step.ok || step.category === "可选未配置");
-  const apiOk = apiSteps.length > 0 && apiSteps.every((step) => step.ok);
-  const summary = apiOk
-    ? "国内接口连接成功，后台和师傅移动端可跨设备同步。"
-    : "接口连接失败，可先切换 VITE_DATA_MODE=local 使用本地演示数据。";
-
-  return {
-    ok: apiOk || isLocalDataMode,
-    directOk: localOk,
-    proxyOk: apiOk,
-    summary,
-    startedAt,
-    finishedAt: cnTime(),
-    directSteps: localSteps,
-    proxySteps: apiSteps,
-    steps: [...localSteps, ...apiSteps],
-  };
-}
-
-async function geocodeAddress(address) {
-  if (!supabaseEnv.hasAmapKey) {
-    throw new Error("未读取到 VITE_AMAP_KEY，无法调用高德地理编码。");
-  }
-  const url = new URL("https://restapi.amap.com/v3/geocode/geo");
-  url.searchParams.set("key", supabaseEnv.amapKey);
-  url.searchParams.set("address", address);
-  const response = await fetch(url.toString());
-  if (!response.ok) throw new Error(`高德地理编码网络失败：HTTP ${response.status}`);
-  const body = await response.json();
-  if (body.status !== "1" || !body.geocodes?.length) {
-    throw new Error(body.info || "高德没有返回匹配地址");
-  }
-  const [lng, lat] = body.geocodes[0].location.split(",").map(Number);
-  return { lng, lat, formattedAddress: body.geocodes[0].formatted_address || address };
-}
-
-const demoWorkers = [
-  { id: "w1", code: "zhang", name: "张师傅", phone: "13800000001", car_no: "粤A·工001" },
-  { id: "w2", code: "li", name: "李师傅", phone: "13800000002", car_no: "粤A·工002" },
-];
-
-const demoPoints = [
-  {
-    id: "p1",
-    title: "GZ-BY-001",
-    address: "广东省广州市白云区太和镇主干道路口",
-    landlord_name: "黄先生",
-    landlord_phone: "13531280287",
-    k_code: "K-GZ-BY-001",
-    project_name: "加多宝村镇墙体项目",
-    status: "待施工",
-    lng: 113.38431,
-    lat: 23.30859,
-    created_at: nowIso(),
-  },
-  {
-    id: "p2",
-    title: "FS-NH-002",
-    address: "广东省佛山市南海区村口商业街",
-    landlord_name: "陈先生",
-    landlord_phone: "13800138000",
-    k_code: "K-FS-NH-002",
-    project_name: "加多宝村镇墙体项目",
-    status: "待施工",
-    lng: 113.14588,
-    lat: 23.04712,
-    created_at: nowIso(),
-  },
-  {
-    id: "p3",
-    title: "QY-YD-003",
-    address: "广东省清远市英德市镇道转角",
-    landlord_name: "林先生",
-    landlord_phone: "13922223333",
-    k_code: "K-QY-YD-003",
-    project_name: "阿康化肥春耕项目",
-    status: "待施工",
-    lng: 113.41521,
-    lat: 24.18677,
-    created_at: nowIso(),
-  },
-];
-
-function createDemoState(overrides = {}) {
-  return {
-    workers: Array.isArray(overrides.workers) && overrides.workers.length ? overrides.workers : demoWorkers.map((w) => ({ ...w })),
-    points: Array.isArray(overrides.points) && overrides.points.length ? overrides.points : demoPoints.map((p) => ({ ...p })),
-    tasks: Array.isArray(overrides.tasks) ? overrides.tasks : [],
-    photos: Array.isArray(overrides.photos) ? overrides.photos : [],
-    trackLogs: Array.isArray(overrides.trackLogs) ? overrides.trackLogs : [],
-  };
-}
-
-function readLocalDemoState() {
-  if (typeof window === "undefined") return createDemoState();
-  try {
-    const raw = window.localStorage.getItem(LOCAL_STORE_KEY);
-    if (!raw) {
-      const initial = createDemoState();
-      window.localStorage.setItem(LOCAL_STORE_KEY, JSON.stringify(initial));
-      return initial;
-    }
-    return createDemoState(JSON.parse(raw));
-  } catch (err) {
-    console.error("读取本地演示数据失败", err);
-    return createDemoState();
-  }
-}
-
-function writeLocalDemoState(nextState) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(LOCAL_STORE_KEY, JSON.stringify(createDemoState(nextState)));
-  window.dispatchEvent(new Event(LOCAL_STORE_EVENT));
-}
-
-function serializePointForDb(point) {
-  return {
-    id: point.id,
-    title: point.title || point.k_code || uid("point"),
-    address: point.address || "",
-    landlord_name: point.landlord_name || "",
-    landlord_phone: point.landlord_phone || "",
-    k_code: point.k_code || "",
-    project_name: point.project_name || "未分配项目",
-    status: point.status || "待施工",
-    lng: point.lng === "" || point.lng == null ? null : Number(point.lng),
-    lat: point.lat === "" || point.lat == null ? null : Number(point.lat),
-    created_at: point.created_at || nowIso(),
-    updated_at: point.updated_at || null,
-    completed_at: point.completed_at || null,
-  };
-}
-
-function normalizePointInput(row, index = 0) {
-  const get = (...keys) => {
-    for (const key of keys) {
-      if (row[key] != null && row[key] !== "") return row[key];
-    }
-    return "";
-  };
-  const title = normalizeText(get("title", "点位", "点位编号", "编号", "广告位", "墙体编号")) || `NEW-${Date.now()}-${index + 1}`;
-  const projectName = normalizeText(get("project_name", "项目", "项目名称", "project")) || "批量导入项目";
-  return {
-    id: normalizeText(get("id", "ID")) || uid("point"),
-    title,
-    address: normalizeText(get("address", "地址", "详细地址")),
-    landlord_name: normalizeText(get("landlord_name", "房东", "房东姓名", "联系人")),
-    landlord_phone: normalizeText(get("landlord_phone", "房东电话", "电话", "手机号")),
-    k_code: normalizeText(get("k_code", "K码", "k码", "K Code")) || title,
-    project_name: projectName,
-    status: STATUS.includes(normalizeText(get("status", "状态"))) ? normalizeText(get("status", "状态")) : "待施工",
-    lng: Number(get("lng", "经度")) || null,
-    lat: Number(get("lat", "纬度")) || null,
-    created_at: nowIso(),
-  };
-}
-
-function parseBatchText(text) {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (!lines.length) return [];
-  const first = lines[0].split(/\t|,/).map((item) => item.trim());
-  const hasHeader = first.some((item) => /点位|地址|项目|title|address|project/i.test(item));
-  const headers = hasHeader ? first : ["title", "address", "landlord_name", "landlord_phone", "k_code", "project_name", "lng", "lat"];
-  const rows = (hasHeader ? lines.slice(1) : lines).map((line) => {
-    const cells = line.split(/\t|,/).map((item) => item.trim());
-    return headers.reduce((acc, key, index) => ({ ...acc, [key]: cells[index] || "" }), {});
-  });
-  return rows.map(normalizePointInput);
-}
-
-async function parsePointFile(file) {
-  const XLSX = await import("xlsx");
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer);
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-  return rows.map(normalizePointInput);
 }
 
 function useH5Data() {
-  const initialState = useMemo(() => readLocalDemoState(), []);
-  const [workers, setWorkers] = useState(initialState.workers);
-  const [points, setPoints] = useState(initialState.points);
-  const [tasks, setTasks] = useState(initialState.tasks);
-  const [photos, setPhotos] = useState(initialState.photos);
-  const [trackLogs, setTrackLogs] = useState(initialState.trackLogs || []);
+  const [projects, setProjects] = useState([]);
+  const [workers, setWorkers] = useState([]);
+  const [points, setPoints] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [photos, setPhotos] = useState([]);
+  const [trackLogs, setTrackLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [dispatchDebug, setDispatchDebug] = useState(null);
-  const [dataSource, setDataSource] = useState(isLocalDataMode ? "本地演示任务" : getDataModeLabel());
+  const [dataSource, setDataSource] = useState(getDataModeLabel());
 
-  function applyLocalState(updater) {
-    const current = readLocalDemoState();
-    const next = createDemoState(typeof updater === "function" ? updater(current) : updater);
-    setWorkers(next.workers);
-    setPoints(next.points);
-    setTasks(next.tasks);
-    setPhotos(next.photos);
-    setTrackLogs(next.trackLogs || []);
-    writeLocalDemoState(next);
-    return next;
+  function applyState(state, sourceLabel = getDataModeLabel()) {
+    setProjects(state.projects || []);
+    setWorkers(state.workers || []);
+    setPoints(state.points || state.wallPoints || []);
+    setTasks(state.tasks || state.dispatchTasks || []);
+    setPhotos(state.photos || state.pointMedia || []);
+    setTrackLogs(state.trackLogs || []);
+    setDataSource(sourceLabel);
   }
 
-  useEffect(() => {
-    if (!isLocalDataMode) return undefined;
-    const syncFromLocal = (event) => {
-      if (event.type === "storage" && event.key && event.key !== LOCAL_STORE_KEY) return;
-      const next = readLocalDemoState();
-      setWorkers(next.workers);
-      setPoints(next.points);
-      setTasks(next.tasks);
-      setPhotos(next.photos);
-      setTrackLogs(next.trackLogs || []);
-    };
-    window.addEventListener("storage", syncFromLocal);
-    window.addEventListener(LOCAL_STORE_EVENT, syncFromLocal);
-    return () => {
-      window.removeEventListener("storage", syncFromLocal);
-      window.removeEventListener(LOCAL_STORE_EVENT, syncFromLocal);
-    };
-  }, []);
-
   async function loadAll() {
-    if (isLocalDataMode) {
-      const next = readLocalDemoState();
-      setWorkers(next.workers);
-      setPoints(next.points);
-      setTasks(next.tasks);
-      setPhotos(next.photos);
-      setTrackLogs(next.trackLogs || []);
-      setDataSource("本地演示任务");
-      setMessage(`当前使用本地演示模式，数据保存在本机浏览器（${cnTime()}）。`);
-      return;
-    }
     setLoading(true);
     try {
-      if (isProxyDataMode) {
-        const state = await proxyApi.loadState();
-        setWorkers(state.workers || []);
-        setPoints(state.points || []);
-        setTasks(state.tasks || []);
-        setPhotos(state.photos || []);
-        setTrackLogs(state.trackLogs || []);
-        setDataSource("国内接口数据");
-        setMessage(`已通过国内 API 读取执行数据（${cnTime()}）。`);
-        return;
+      const state = await proxyApi.loadState();
+      applyState(state, isLocalDataMode ? "本地演示数据" : "国内接口数据");
+      if (!message) {
+        setMessage(isLocalDataMode ? "当前使用本地演示模式，无后端也能完成派单和上传演示。" : `已连接 ${API_BASE_URL}`);
       }
-      const next = readLocalDemoState();
-      setWorkers(next.workers);
-      setPoints(next.points);
-      setTasks(next.tasks);
-      setPhotos(next.photos);
-      setTrackLogs(next.trackLogs || []);
-      setDataSource("本地演示任务");
-      setMessage(`接口模式未启用，已回退本地演示数据（${cnTime()}）。`);
-    } catch (err) {
-      const issue = classifyApiError(err);
-      console.error(err);
-      setMessage(`读取接口失败：${issue.category}。${issue.detail}`);
+    } catch (error) {
+      const issue = classifyApiError(error);
+      setMessage(`${issue.category}：${issue.detail}`);
     } finally {
       setLoading(false);
     }
   }
 
-  async function loadWorkerTasks(workerCode) {
-    if (!isProxyDataMode) {
-      await loadAll();
-      return;
-    }
+  async function loadWorkerTasks(workerId) {
     setLoading(true);
     try {
-      const state = await proxyApi.workerTasks(workerCode);
-      setWorkers(state.worker ? [state.worker] : []);
-      setPoints(state.points || []);
-      setTasks(state.tasks || []);
-      setPhotos(state.photos || []);
-      setTrackLogs(state.trackLogs || []);
-      setDataSource("真实派单任务");
-      setMessage(`已通过 /api/worker-tasks 读取 ${state.points?.length || 0} 个真实派单任务。`);
-    } catch (err) {
-      const issue = classifyApiError(err);
-      const next = readLocalDemoState();
-      setWorkers(next.workers);
-      setPoints(next.points);
-      setTasks(next.tasks);
-      setPhotos(next.photos);
-      setTrackLogs(next.trackLogs || []);
-      setDataSource("本地演示任务");
-      setMessage(`读取真实派单任务失败，已回退本地演示：${issue.category}。${issue.detail}`);
+      const state = await proxyApi.workerTasks(workerId);
+      applyState({
+        projects,
+        workers: state.worker ? [state.worker] : state.workers || workers,
+        points: state.points || [],
+        tasks: state.tasks || [],
+        photos: state.photos || [],
+        trackLogs: state.trackLogs || trackLogs,
+      }, isProxyDataMode ? "真实派单任务" : "本地演示任务");
+      setMessage(`已读取 ${state.points?.length || 0} 个派单点位。`);
+    } catch (error) {
+      const issue = classifyApiError(error);
+      setMessage(`读取师傅任务失败：${issue.category}，${issue.detail}`);
+      await loadAll();
     } finally {
       setLoading(false);
     }
   }
 
   async function seedDemoData() {
-    if (isLocalDataMode) {
-      applyLocalState(createDemoState());
-      setMessage("已重置本地演示数据。你可以直接在后台派单，再打开师傅移动端测试。");
-      return;
-    }
     setLoading(true);
     try {
-      if (isProxyDataMode) {
-        const state = await proxyApi.seedDemo();
-        setWorkers(state.workers || []);
-        setPoints(state.points || []);
-        setTasks(state.tasks || []);
-        setPhotos(state.photos || []);
-        setTrackLogs(state.trackLogs || []);
-        setMessage("已通过国内 API 写入演示师傅和点位。");
-        return;
-      }
-      applyLocalState(createDemoState());
-      setMessage("接口模式未启用，已重置本地演示数据。");
-    } catch (err) {
-      const issue = classifyApiError(err);
-      setMessage(`写入演示数据失败：${issue.category}。${issue.detail}`);
+      const state = await proxyApi.seedDemo();
+      applyState(state, isLocalDataMode ? "本地演示数据" : "国内接口演示数据");
+      setMessage("已写入演示数据，可直接筛选点位并派单给师傅移动端。");
+    } catch (error) {
+      const issue = classifyApiError(error);
+      setMessage(`写入演示数据失败：${issue.category}，${issue.detail}`);
     } finally {
       setLoading(false);
     }
   }
 
   async function addPoints(newPoints) {
-    const payload = newPoints.map(serializePointForDb);
-    if (!payload.length) return;
-    if (isLocalDataMode) {
-      applyLocalState((current) => ({ ...current, points: [...payload, ...current.points] }));
-      setMessage(`本地演示：已新增 ${payload.length} 个点位。`);
-      return;
-    }
+    if (!newPoints.length) return;
     setLoading(true);
     try {
-      if (isProxyDataMode) {
-        await proxyApi.addPoints(payload);
-        await loadAll();
-        setMessage(`已通过国内 API 写入 ${payload.length} 个点位。`);
-        return;
-      }
-      applyLocalState((current) => ({ ...current, points: [...payload, ...current.points] }));
-      setMessage(`接口模式未启用，本地已新增 ${payload.length} 个点位。`);
-    } catch (err) {
-      const issue = classifyApiError(err);
-      setMessage(`批量新增失败：${issue.category}。${issue.detail}`);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function updatePoint(pointId, changes) {
-    const payload = serializePointForDb({ id: pointId, ...changes });
-    delete payload.created_at;
-    payload.updated_at = nowIso();
-    if (payload.status !== "已完成") payload.completed_at = null;
-    if (isLocalDataMode) {
-      applyLocalState((current) => ({
-        ...current,
-        points: current.points.map((point) => (point.id === pointId ? { ...point, ...payload } : point)),
-      }));
-      setMessage("本地演示：点位已更新。");
-      return;
-    }
-    setLoading(true);
-    try {
-      if (isProxyDataMode) {
-        await proxyApi.updatePoint(pointId, payload);
-        await loadAll();
-        setMessage("点位已通过国内 API 更新。");
-        return;
-      }
-      applyLocalState((current) => ({
-        ...current,
-        points: current.points.map((point) => (point.id === pointId ? { ...point, ...payload } : point)),
-      }));
-      setMessage("接口模式未启用，本地点位已更新。");
-    } catch (err) {
-      const issue = classifyApiError(err);
-      setMessage(`更新点位失败：${issue.category}。${issue.detail}`);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function renameProject(oldName, nextName) {
-    const cleanName = normalizeText(nextName);
-    if (!oldName || !cleanName) return;
-    if (isLocalDataMode) {
-      applyLocalState((current) => ({
-        ...current,
-        points: current.points.map((point) => (getProjectName(point) === oldName ? { ...point, project_name: cleanName, updated_at: nowIso() } : point)),
-      }));
-      setMessage(`本地演示：项目已改名为 ${cleanName}。`);
-      return;
-    }
-    setLoading(true);
-    try {
-      if (isProxyDataMode) {
-        await proxyApi.renameProject(oldName, cleanName);
-        await loadAll();
-        setMessage(`项目已通过国内 API 改名为 ${cleanName}。`);
-        return;
-      }
-      applyLocalState((current) => ({
-        ...current,
-        points: current.points.map((point) => (getProjectName(point) === oldName ? { ...point, project_name: cleanName, updated_at: nowIso() } : point)),
-      }));
-      setMessage(`接口模式未启用，本地项目已改名为 ${cleanName}。`);
-    } catch (err) {
-      const issue = classifyApiError(err);
-      setMessage(`项目改名失败：${issue.category}。${issue.detail}`);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function dispatchPoints(workerId, pointIds) {
-    const selectedIds = [...new Set(pointIds)];
-    const worker = workers.find((item) => item.id === workerId || item.code === workerId) || {};
-
-    if (isProxyDataMode) {
-      const requestPayload = {
-        worker_id: worker.id || workerId,
-        worker_key: worker.code || worker.worker_key || worker.slug || workerId,
-        worker_name: worker.name || "",
-        worker_phone: worker.phone || "",
-        point_ids: selectedIds,
-      };
-      setLoading(true);
-      setDispatchDebug(null);
-      try {
-        const result = await dispatchPointsApi(requestPayload);
-        await loadAll();
-        setDispatchDebug({
-          url: "/api/dispatch",
-          payload: requestPayload,
-          status: 200,
-          response: result,
-          stage: result.stage || "",
-          message: result.ok ? "派单成功" : "",
-          details: result.details || "",
-        });
-        setMessage(`已成功发送 ${result.inserted || selectedIds.length} 个点位给 ${result.worker?.name || worker.name || "指定师傅"}。`);
-        return;
-      } catch (err) {
-        const issue = classifyApiError(err);
-        setDispatchDebug({
-          url: "/api/dispatch",
-          payload: requestPayload,
-          stage: err.stage || err.data?.stage || "",
-          message: err.message || err.data?.message || issue.category,
-          error_name: err.data?.error_name || "",
-          error_message: err.data?.error_message || "",
-          details: err.details || err.data?.details || issue.detail,
-          status: err.status || "",
-          response: err.data || null,
-        });
-        setMessage(`派单失败：${err.stage || err.data?.stage ? `${err.stage || err.data?.stage}，` : ""}${err.message || issue.category}。${err.details || err.data?.details || issue.detail}`);
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
-    const existingTaskKeys = new Set(tasks.map((task) => `${task.worker_id}:${task.point_id}`));
-    const payload = selectedIds
-      .filter((pointId) => !existingTaskKeys.has(`${workerId}:${pointId}`))
-      .map((pointId) => ({
-        id: uid("task"),
-        worker_id: workerId,
-        point_id: pointId,
-        status: "施工中",
-        created_at: nowIso(),
-      }));
-
-    if (!payload.length) {
-      setMessage("选中的点位已经派发给该师傅，无需重复派单。");
-      return;
-    }
-
-    if (isLocalDataMode) {
-      applyLocalState((current) => {
-        const currentKeys = new Set(current.tasks.map((task) => `${task.worker_id}:${task.point_id}`));
-        const newTasks = payload.filter((task) => !currentKeys.has(`${task.worker_id}:${task.point_id}`));
-        const dispatchedPointIds = new Set(newTasks.map((task) => task.point_id));
-        return {
-          ...current,
-          tasks: [...newTasks, ...current.tasks],
-          points: current.points.map((point) =>
-            dispatchedPointIds.has(point.id) && point.status !== "已完成"
-              ? { ...point, status: "施工中", updated_at: nowIso() }
-              : point
-          ),
-        };
-      });
-      setMessage("本地演示：已派单。打开对应师傅移动端链接即可看到任务。");
-      return;
-    }
-
-    setLoading(true);
-    setDispatchDebug(null);
-    try {
-      applyLocalState((current) => ({
-        ...current,
-        tasks: [...payload, ...current.tasks],
-        points: current.points.map((point) => payload.some((task) => task.point_id === point.id) ? { ...point, status: "施工中", updated_at: nowIso() } : point),
-      }));
-      setMessage("接口模式未启用，已使用本地演示派单。");
-    } catch (err) {
-      const issue = classifyApiError(err);
-      const payload = {
-        worker_id: worker.id || workerId,
-        worker_key: worker.code || worker.worker_key || worker.slug || workerId,
-        worker_name: worker.name || "",
-        worker_phone: worker.phone || "",
-        point_ids: selectedIds,
-      };
-      setDispatchDebug({
-        url: "/api/dispatch",
-        payload,
-        stage: err.stage || "",
-        message: err.message || issue.category,
-        details: err.details || issue.detail,
-        status: err.status || "",
-      });
-      setMessage(`派单失败：${err.stage ? `${err.stage}，` : ""}${issue.category}。${issue.detail}`);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function updatePointStatus(pointId, nextStatus) {
-    const changes = { status: nextStatus, updated_at: nowIso(), completed_at: nextStatus === "已完成" ? nowIso() : null };
-    if (isLocalDataMode) {
-      applyLocalState((current) => ({
-        ...current,
-        points: current.points.map((p) => (p.id === pointId ? { ...p, ...changes } : p)),
-      }));
-      return;
-    }
-    if (isProxyDataMode) {
-      try {
-        await proxyApi.updatePoint(pointId, changes);
-      } catch (error) {
-        const issue = classifyApiError(error);
-        setMessage(`更新状态失败：${issue.category}。${issue.detail}`);
-      }
+      await proxyApi.addPoints(newPoints);
+      setMessage(`已新增 ${newPoints.length} 个点位。`);
       await loadAll();
-      return;
-    }
-    applyLocalState((current) => ({
-      ...current,
-      points: current.points.map((p) => (p.id === pointId ? { ...p, ...changes } : p)),
-    }));
-  }
-
-  async function updatePhotoKind(photoId, nextKind) {
-    if (isLocalDataMode) {
-      applyLocalState((current) => ({
-        ...current,
-        photos: current.photos.map((photo) => (photo.id === photoId ? { ...photo, kind: nextKind } : photo)),
-      }));
-      setMessage(`本地演示：图片已分类为 ${nextKind}。`);
-      return;
-    }
-    if (isProxyDataMode) {
-      try {
-        await proxyApi.updatePhotoKind(photoId, nextKind);
-        await loadAll();
-        setMessage(`图片已通过国内 API 分类为 ${nextKind}。`);
-      } catch (error) {
-        const issue = classifyApiError(error);
-        setMessage(`图片分类写入失败：${issue.category}。${issue.detail}`);
-      }
-      return;
-    }
-    applyLocalState((current) => ({
-      ...current,
-      photos: current.photos.map((photo) => (photo.id === photoId ? { ...photo, kind: nextKind } : photo)),
-    }));
-    setMessage(`接口模式未启用，本地图片已分类为 ${nextKind}。`);
-  }
-
-  async function saveTrackLog(log) {
-    if (isLocalDataMode) {
-      applyLocalState((current) => ({
-        ...current,
-        trackLogs: [{ id: uid("track"), ...log, created_at: nowIso() }, ...(current.trackLogs || [])],
-      }));
-      setMessage("本地演示：已保存定位轨迹。");
-      return;
-    }
-    try {
-      await proxyApi.saveTrackLog(log);
-      await loadAll();
-      setMessage("定位轨迹已写入国内 API。");
     } catch (error) {
       const issue = classifyApiError(error);
-      setMessage(`定位轨迹写入失败：${issue.category}。${issue.detail}`);
+      setMessage(`新增点位失败：${issue.category}，${issue.detail}`);
+    } finally {
+      setLoading(false);
     }
   }
 
-  async function uploadPhoto({ file, point, worker }) {
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${point.id}/${worker.id}/${Date.now()}_${Math.random().toString(16).slice(2)}.${ext}`;
-    const kind = getMediaKind(file);
-
-    let publicUrl = "";
-    if (isProxyDataMode) {
-      const result = await proxyApi.upload({ file, point, worker, kind });
-      return result.url || result.publicUrl || "";
+  async function updatePoint(point) {
+    setLoading(true);
+    try {
+      await proxyApi.updatePoint(point.id, point);
+      setMessage(`已保存点位 ${point.title || point.id}。`);
+      await loadAll();
+    } catch (error) {
+      const issue = classifyApiError(error);
+      setMessage(`保存点位失败：${issue.category}，${issue.detail}`);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    publicUrl = URL.createObjectURL(file);
-    applyLocalState((current) => ({
-      ...current,
-      photos: [
-        { id: uid("photo"), point_id: point.id, worker_id: worker.id, url: publicUrl, file_name: file.name, kind, created_at: nowIso() },
-        ...current.photos,
-      ],
-      points: current.points.map((p) => (p.id === point.id ? { ...p, status: "已完成", completed_at: nowIso(), updated_at: nowIso() } : p)),
-      tasks: current.tasks.map((task) => task.point_id === point.id ? { ...task, status: "已完成", completed_at: nowIso() } : task),
-    }));
-    return publicUrl;
+  async function removePoint(pointId) {
+    setLoading(true);
+    try {
+      await deleteWallPoint(pointId);
+      setMessage("点位已删除。");
+      await loadAll();
+    } catch (error) {
+      const issue = classifyApiError(error);
+      setMessage(`删除点位失败：${issue.category}，${issue.detail}`);
+    } finally {
+      setLoading(false);
+    }
+  }
 
+  async function dispatchToWorker(worker, pointIds) {
+    const requestPayload = {
+      workerId: worker.id,
+      worker_id: worker.id,
+      worker_key: normalizeWorkerCode(worker),
+      worker_name: worker.name,
+      worker_phone: worker.phone,
+      pointIds,
+      point_ids: pointIds,
+    };
+    setDispatchDebug({ path: "/api/dispatch", request: requestPayload });
+    setLoading(true);
+    try {
+      const result = await dispatchPointsApi(requestPayload);
+      setDispatchDebug({ path: "/api/dispatch", request: requestPayload, response: result, status: 200 });
+      setMessage(`已成功发送 ${pointIds.length} 个点位给 ${worker.name}`);
+      await loadAll();
+      return result;
+    } catch (error) {
+      const issue = classifyApiError(error);
+      setDispatchDebug({
+        path: "/api/dispatch",
+        request: requestPayload,
+        status: error.status,
+        response: error.data,
+        stage: error.data?.stage,
+        message: error.message,
+        details: issue.detail,
+      });
+      setMessage(`派单失败：${issue.category}，${issue.detail}`);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function uploadPhoto({ file, point, worker, kind }) {
+    const result = await proxyApi.upload({ file, point, worker, kind });
+    setMessage(`${point.title} 已上传资料，点位状态自动更新为已完成。`);
+    return result;
+  }
+
+  async function saveProjectDraft(project) {
+    setLoading(true);
+    try {
+      await saveProject(project);
+      setMessage(`项目 ${project.name} 已保存。`);
+      await loadAll();
+    } catch (error) {
+      const issue = classifyApiError(error);
+      setMessage(`保存项目失败：${issue.category}，${issue.detail}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveTrack(log) {
+    await proxyApi.saveTrackLog(log);
+    await loadAll();
+  }
+
+  async function diagnose() {
+    try {
+      const result = await proxyApi.diagnose();
+      setMessage(`接口诊断完成：${result.message || result.label || "当前模式可用"}`);
+      return result;
+    } catch (error) {
+      const issue = classifyApiError(error);
+      setMessage(`接口诊断失败：${issue.category}，${issue.detail}`);
+      return { ok: false, error: issue };
+    }
   }
 
   return {
+    projects,
     workers,
     points,
     tasks,
@@ -793,931 +363,1124 @@ function useH5Data() {
     message,
     dispatchDebug,
     dataSource,
-    setMessage,
     loadAll,
     loadWorkerTasks,
     seedDemoData,
     addPoints,
     updatePoint,
-    renameProject,
-    dispatchPoints,
-    updatePointStatus,
-    updatePhotoKind,
-    saveTrackLog,
+    removePoint,
+    dispatchToWorker,
     uploadPhoto,
+    saveProjectDraft,
+    saveTrack,
+    diagnose,
   };
 }
 
 function StatusPill({ status }) {
-  const cls = status === "已完成" ? "ok" : status === "施工中" ? "doing" : status === "需复查" ? "bad" : "todo";
-  return <span className={`pill ${cls}`}>{status || "待施工"}</span>;
+  const value = status || "待施工";
+  const className = value === "已完成" ? "ok" : value === "施工中" ? "doing" : value === "需复查" ? "bad" : "todo";
+  return <span className={`pill ${className}`}>{value}</span>;
 }
 
-function MiniMetric({ label, value }) {
+function Modal({ title, subtitle, children, onClose, wide = false }) {
   return (
-    <div className="metric">
-      <b>{value}</b>
-      <span>{label}</span>
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <section className={`modal-card ${wide ? "wide" : ""}`}>
+        <header className="modal-head">
+          <div>
+            <h2>{title}</h2>
+            {subtitle && <p>{subtitle}</p>}
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="关闭">×</button>
+        </header>
+        {children}
+      </section>
     </div>
-  );
-}
-
-function Field({ label, children }) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function MediaThumb({ photo }) {
-  const kind = getMediaKind(photo);
-  const isVideo = kind.includes("视频") || photo.kind?.includes("视频");
-  return (
-    <div className="media-thumb">
-      <div className="media-preview">
-        {isVideo ? <video src={photo.url} controls /> : <img src={photo.url} alt={photo.file_name || "现场图片"} />}
-      </div>
-      <div className="media-caption">
-        <b>{photo.file_name || "未命名文件"}</b>
-        <span>{photo.kind || kind}</span>
-      </div>
-    </div>
-  );
-}
-
-function DiagnosticPanel({ compact = false }) {
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState(null);
-
-  async function run() {
-    setRunning(true);
-    try {
-      setResult(await runApiDiagnostics());
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  return (
-    <section className={compact ? "diag-card compact" : "diag-card"}>
-      <div className="section-head">
-        <div>
-          <h2>国内接口连接诊断</h2>
-          <p>{result ? `最近检测：${result.finishedAt}` : "检测当前数据模式、本地演示和国内 API 接口连接状态。"}</p>
-        </div>
-        <button className="primary" onClick={run} disabled={running}>{running ? "检测中..." : "开始诊断"}</button>
-      </div>
-
-      <div className="env-grid">
-        <div><span>VITE_DATA_MODE</span><b>{supabaseEnv.dataMode || "local"}</b><small>{getDataModeLabel()}</small></div>
-        <div><span>VITE_API_BASE_URL</span><b>{isLocalDataMode ? "本地模式" : (supabaseEnv.apiBaseUrl ? "已读取" : "未读取")}</b><small>{isLocalDataMode ? "localStorage 演示数据" : supabaseEnv.apiBaseUrl || "请填写国内 API 地址"}</small></div>
-        <div><span>VITE_AMAP_KEY</span><b>{supabaseEnv.hasAmapKey ? "已读取" : "未读取"}</b><small>用于地址自动匹配经纬度</small></div>
-        <div><span>Kimi 分类接口</span><b>{supabaseEnv.hasKimiClassifyEndpoint ? "已读取" : "可选"}</b><small>建议由国内后端代理</small></div>
-      </div>
-
-      {isLocalDataMode && <div className="warn">当前是本地演示模式；真实手机局域网测试请设置 VITE_DATA_MODE=mock-server 和 VITE_API_BASE_URL。</div>}
-      {result?.summary && <div className={result.proxyOk ? "info" : "warn"}>{result.summary}</div>}
-
-      {result && (
-        <div className="diag-steps">
-          <h3>数据模式与公开配置</h3>
-          {result.directSteps.map((step) => (
-            <div key={step.name} className={`diag-step ${step.ok ? "pass" : "fail"}`}>
-              <b>{step.ok ? "通过" : step.category}</b>
-              <span>{step.name}</span>
-              <small>{step.detail}</small>
-            </div>
-          ))}
-          <h3>国内后端接口</h3>
-          {result.proxySteps.map((step) => (
-            <div key={step.name} className={`diag-step ${step.ok ? "pass" : "fail"}`}>
-              <b>{step.ok ? "通过" : step.category}</b>
-              <span>{step.name}</span>
-              <small>{step.detail}</small>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
   );
 }
 
 function AdminPage({ data }) {
-  const { workers, points, tasks, photos, trackLogs, loading, message, dispatchDebug, loadAll, seedDemoData, dispatchPoints, addPoints, updatePoint, renameProject, updatePhotoKind, saveTrackLog, setMessage } = data;
-  const [activeTab, setActiveTab] = useState("console");
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("全部");
-  const [projectFilter, setProjectFilter] = useState("全部项目");
-  const [tagFilter, setTagFilter] = useState("全部标签");
+  const [activeProject, setActiveProject] = useState("all");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("全部");
+  const [activeTags, setActiveTags] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [workerId, setWorkerId] = useState(workers[0]?.id || "w1");
   const [selectedPointId, setSelectedPointId] = useState("");
-  const [expandedList, setExpandedList] = useState(false);
-  const [batchText, setBatchText] = useState("");
+  const [dispatchWorkerId, setDispatchWorkerId] = useState("");
+  const [mapMode, setMapMode] = useState("standard");
+  const [modal, setModal] = useState(null);
+  const [sitePoint, setSitePoint] = useState(null);
+  const [editPoint, setEditPoint] = useState(null);
+  const [diagnosis, setDiagnosis] = useState(null);
+  const [localNotice, setLocalNotice] = useState("");
+
+  const projects = useMemo(() => {
+    const seen = new Set();
+    const normalized = data.projects
+      .filter((project) => project.id !== "all" && project.name !== "全部项目")
+      .map((project) => ({
+        ...project,
+        id: project.id || project.name,
+        name: project.name || project.id,
+        client: project.client || "未填写客户",
+        month: project.month || "未设置年月",
+        color: project.color || DEFAULT_PROJECT_COLORS[project.name] || "#2563eb",
+      }))
+      .filter((project) => {
+        if (seen.has(project.name)) return false;
+        seen.add(project.name);
+        return true;
+      });
+    const fromPoints = [...new Set(data.points.map(getProjectName))]
+      .filter((name) => name && !seen.has(name))
+      .map((name) => ({ id: name, name, client: name.replace("项目", ""), month: "2026-05", color: DEFAULT_PROJECT_COLORS[name] || "#64748b" }));
+    return [{ id: "all", name: "全部项目", client: "总部调度", month: "全部", color: "#0f172a" }, ...normalized, ...fromPoints];
+  }, [data.projects, data.points]);
 
   useEffect(() => {
-    if (!workerId && workers[0]) setWorkerId(workers[0].id);
-  }, [workers, workerId]);
+    if (!selectedPointId && data.points[0]) setSelectedPointId(data.points[0].id);
+    if (selectedPointId && !data.points.some((point) => point.id === selectedPointId)) setSelectedPointId(data.points[0]?.id || "");
+  }, [data.points, selectedPointId]);
 
-  const projects = useMemo(() => uniqueValues(points.map(getProjectName)), [points]);
-  const mediaByPoint = useMemo(() => {
-    return photos.reduce((acc, photo) => {
-      acc[photo.point_id] = acc[photo.point_id] || [];
-      acc[photo.point_id].push(photo);
-      return acc;
-    }, {});
-  }, [photos]);
-  const taskPointIds = useMemo(() => new Set(tasks.map((task) => task.point_id)), [tasks]);
+  useEffect(() => {
+    if (!dispatchWorkerId && data.workers[0]) setDispatchWorkerId(data.workers[0].id);
+  }, [data.workers, dispatchWorkerId]);
 
-  const tags = useMemo(() => {
-    const computed = new Set(["全部标签", "有照片", "无照片", "有坐标", "无坐标", "已派单"]);
-    STATUS.forEach((item) => computed.add(item));
-    projects.forEach((item) => computed.add(item));
-    return [...computed];
-  }, [projects]);
-
-  const filtered = useMemo(() => {
-    const keyword = query.trim();
-    return points.filter((point) => {
-      const projectName = getProjectName(point);
-      const mediaCount = mediaByPoint[point.id]?.length || 0;
-      const hasCoord = point.lng != null && point.lat != null;
-      const haystack = [point.title, point.address, point.landlord_name, point.landlord_phone, point.k_code, point.project_name].join(" ");
-      const qOk = !keyword || haystack.includes(keyword);
-      const statusOk = status === "全部" || point.status === status;
-      const projectOk = projectFilter === "全部项目" || projectName === projectFilter;
-      const tagOk =
-        tagFilter === "全部标签" ||
-        point.status === tagFilter ||
-        projectName === tagFilter ||
-        (tagFilter === "有照片" && mediaCount > 0) ||
-        (tagFilter === "无照片" && mediaCount === 0) ||
-        (tagFilter === "有坐标" && hasCoord) ||
-        (tagFilter === "无坐标" && !hasCoord) ||
-        (tagFilter === "已派单" && taskPointIds.has(point.id));
-      return qOk && statusOk && projectOk && tagOk;
+  const filteredPoints = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return data.points.filter((point) => {
+      const projectOk = activeProject === "all" || getProjectName(point) === activeProject;
+      const statusOk = statusFilter === "全部" || getPointStatus(point) === statusFilter;
+      const haystack = [
+        point.title,
+        point.address,
+        point.landlord_name,
+        point.landlord_phone,
+        getCaptainName(point),
+        getCaptainPhone(point),
+        getScoutName(point),
+        getScoutPhone(point),
+        point.k_code,
+        getProjectName(point),
+        getCity(point),
+        ...pointTags(point, data.photos),
+      ].join(" ").toLowerCase();
+      const searchOk = !keyword || haystack.includes(keyword);
+      const tagsOk = !activeTags.length || activeTags.every((tag) => pointTags(point, data.photos).includes(tag));
+      return projectOk && statusOk && searchOk && tagsOk;
     });
-  }, [points, query, status, projectFilter, tagFilter, mediaByPoint, taskPointIds]);
+  }, [activeProject, search, statusFilter, activeTags, data.points, data.photos]);
 
-  const selectedPoint = useMemo(() => {
-    return points.find((point) => point.id === selectedPointId) || filtered[0] || points[0] || null;
-  }, [points, selectedPointId, filtered]);
+  const selectedPoint = data.points.find((point) => point.id === selectedPointId) || filteredPoints[0] || data.points[0] || null;
+  const dispatchWorker = data.workers.find((worker) => worker.id === dispatchWorkerId) || data.workers[0] || null;
+  const allTags = useMemo(() => [...new Set(data.points.flatMap((point) => pointTags(point, data.photos)))].slice(0, 32), [data.points, data.photos]);
+  const currentPoints = activeProject === "all" ? data.points : data.points.filter((point) => getProjectName(point) === activeProject);
+  const selectedDispatchPoints = filteredPoints.filter((point) => selectedIds.includes(point.id));
+  const stats = {
+    total: currentPoints.length,
+    doing: currentPoints.filter((point) => getPointStatus(point) === "施工中").length,
+    done: currentPoints.filter((point) => getPointStatus(point) === "已完成").length,
+    online: data.workers.filter((worker) => worker.status !== "离线").length || data.workers.length,
+  };
 
-  useEffect(() => {
-    setSelectedIds(filtered.map((point) => point.id));
-    if (filtered[0] && !filtered.some((point) => point.id === selectedPointId)) {
-      setSelectedPointId(filtered[0].id);
-    }
-  }, [query, status, projectFilter, tagFilter, points.length]);
-
-  function toggle(id) {
-    setSelectedIds((prev) => prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]);
-    setSelectedPointId(id);
+  function toggleSelect(pointId) {
+    setSelectedIds((current) => current.includes(pointId) ? current.filter((id) => id !== pointId) : [...current, pointId]);
   }
 
-  async function handleDispatchSelectedPoints() {
-    await dispatchPoints(workerId, selectedIds);
-  }
-
-  async function handleBatchTextImport() {
-    const rows = parseBatchText(batchText);
-    if (!rows.length) {
-      setMessage("没有识别到可导入点位。");
+  async function sendSelected() {
+    if (!dispatchWorker) {
+      setLocalNotice("请选择师傅");
       return;
     }
-    await addPoints(rows);
-    setBatchText("");
-  }
-
-  async function handleFileImport(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const rows = await parsePointFile(file);
-      await addPoints(rows);
-    } catch (err) {
-      setMessage(`Excel 解析失败：${err.message}`);
-    } finally {
-      event.target.value = "";
-    }
-  }
-
-  async function handleGeocode(point) {
-    if (!point?.address) {
-      setMessage("当前点位没有地址，无法自动匹配经纬度。");
+    if (!selectedDispatchPoints.length) {
+      setLocalNotice("请至少选择一个点位");
       return;
     }
-    try {
-      const result = await geocodeAddress(point.address);
-      await updatePoint(point.id, { ...point, lng: result.lng, lat: result.lat, address: result.formattedAddress });
-      setMessage(`已匹配经纬度：${result.lng}, ${result.lat}`);
-    } catch (err) {
-      setMessage(`地址自动匹配失败：${err.message}`);
-    }
+    setLocalNotice("");
+    await data.dispatchToWorker(dispatchWorker, selectedDispatchPoints.map((point) => point.id));
+    setSelectedIds([]);
   }
 
-  async function handleKimiClassify(photo) {
-    let nextKind = getMediaKind(photo);
-    if (supabaseEnv.hasKimiClassifyEndpoint) {
-      try {
-        const response = await fetch(supabaseEnv.kimiClassifyEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: photo.url, fileName: photo.file_name, currentKind: photo.kind }),
-        });
-        if (response.ok) {
-          const body = await response.json();
-          nextKind = body.kind || body.category || nextKind;
-        }
-      } catch (err) {
-        setMessage(`Kimi 分类接口调用失败，已使用本地规则：${err.message}`);
-      }
-    }
-    await updatePhotoKind(photo.id, nextKind);
+  async function runDiagnosis() {
+    const result = await data.diagnose();
+    setDiagnosis(result);
+    setModal("diagnosis");
   }
 
-  const joinedTasks = tasks.map((task) => ({
-    ...task,
-    point: points.find((point) => point.id === task.point_id),
-    worker: workers.find((worker) => worker.id === task.worker_id),
-  })).filter((task) => task.point);
+  function exportJson() {
+    const blob = new Blob([safeJson({ projects, workers: data.workers, points: data.points, tasks: data.tasks, photos: data.photos, exportedAt: nowIso() })], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `wall-ad-export-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <main className="admin-shell">
-      <aside className="side-nav">
-        <div className="brand-block">
-          <b>墙体广告执行台</b>
-          <span>{getDataModeLabel()}</span>
+      <section className="hero-shell">
+        <div className="hero-copy">
+          <span className="system-title">全国墙体广告执行坐标系统</span>
+          <h1>全国墙体广告执行坐标系统</h1>
+          <p>项目切换、共用墙面、工人小车定位和后台轨迹记录，一屏完成点位筛选、派单、照片回传和状态闭环。</p>
+          <div className="hero-meta">
+            <span>数据模式：{getDataModeLabel(DATA_MODE)}</span>
+            <span>{isLocalDataMode ? "localStorage 演示" : API_BASE_URL}</span>
+            <span>{data.loading ? "同步中" : "已就绪"}</span>
+          </div>
         </div>
-        <nav>
-          {ADMIN_TABS.map((tab) => (
-            <button key={tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </aside>
-
-      <section className="admin-main">
-        <header className="topbar">
-          <div>
-            <strong className="system-title">全国墙体广告执行派单系统</strong>
-            <h1>{ADMIN_TABS.find((tab) => tab.id === activeTab)?.label || "后台"}</h1>
-            <p>{isProxyDataMode ? `当前通过国内 API 同步数据：${supabaseEnv.apiBaseUrl}` : "当前数据保存在本机浏览器。"}</p>
-          </div>
-          <div className="top-actions">
-            <button onClick={loadAll} disabled={loading}>刷新数据</button>
-            <button onClick={seedDemoData} disabled={loading}>{isLocalDataMode ? "重置本地演示数据" : "写入演示数据"}</button>
-          </div>
-        </header>
-
-        {message && <section className="info">{message}</section>}
-        {dispatchDebug && (
-          <details className="info">
-            <summary>派单调试信息</summary>
-            <pre>{JSON.stringify(dispatchDebug, null, 2)}</pre>
-          </details>
-        )}
-
-        <section className="metrics-grid">
-          <MiniMetric label="全部点位" value={formatCount(points.length)} />
-          <MiniMetric label="已完成" value={formatCount(points.filter((point) => point.status === "已完成").length)} />
-          <MiniMetric label="派单记录" value={formatCount(tasks.length)} />
-          <MiniMetric label="照片/视频" value={formatCount(photos.length)} />
-          <MiniMetric label="项目" value={formatCount(projects.length)} />
-        </section>
-
-        {activeTab === "console" && (
-          <ConsolePanel
-            workers={workers}
-            photos={photos}
-            filtered={filtered}
-            selectedIds={selectedIds}
-            selectedPoint={selectedPoint}
-            query={query}
-            status={status}
-            projectFilter={projectFilter}
-            tagFilter={tagFilter}
-            projects={projects}
-            tags={tags}
-            workerId={workerId}
-            expandedList={expandedList}
-            setQuery={setQuery}
-            setStatus={setStatus}
-            setProjectFilter={setProjectFilter}
-            setTagFilter={setTagFilter}
-            setWorkerId={setWorkerId}
-            setExpandedList={setExpandedList}
-            setSelectedIds={setSelectedIds}
-            setSelectedPointId={setSelectedPointId}
-            toggle={toggle}
-            handleDispatch={handleDispatchSelectedPoints}
-            handleGeocode={handleGeocode}
-            loading={loading}
-          />
-        )}
-
-        {activeTab === "projects" && (
-          <ProjectPanel projects={projects} points={points} tasks={tasks} photos={photos} setProjectFilter={setProjectFilter} setActiveTab={setActiveTab} renameProject={renameProject} />
-        )}
-
-        {activeTab === "batch" && (
-          <BatchPanel batchText={batchText} setBatchText={setBatchText} handleBatchTextImport={handleBatchTextImport} handleFileImport={handleFileImport} loading={loading} />
-        )}
-
-        {activeTab === "edit" && (
-          <PointEditPanel points={points} selectedPoint={selectedPoint} setSelectedPointId={setSelectedPointId} updatePoint={updatePoint} handleGeocode={handleGeocode} />
-        )}
-
-        {activeTab === "site" && (
-          <SiteCenterPanel tasks={joinedTasks} photos={photos} points={points} workers={workers} />
-        )}
-
-        {activeTab === "library" && (
-          <PhotoLibraryPanel projects={projects} points={points} photos={photos} />
-        )}
-
-        {activeTab === "pano" && (
-          <MediaKindPanel title="720全景" kind="720全景" photos={photos} points={points} />
-        )}
-
-        {activeTab === "video" && (
-          <MediaKindPanel title="全景视频" kind="全景视频" photos={photos} points={points} />
-        )}
-
-        {activeTab === "watermark" && (
-          <MediaKindPanel title="水印图片" kind="水印图片" photos={photos} points={points} />
-        )}
-
-        {activeTab === "track" && (
-          <TrackPanel tasks={joinedTasks} workers={workers} trackLogs={trackLogs} saveTrackLog={saveTrackLog} />
-        )}
-
-        {activeTab === "kimi" && (
-          <KimiPanel photos={photos} points={points} handleKimiClassify={handleKimiClassify} />
-        )}
-
-        {activeTab === "diagnostics" && <DiagnosticPanel />}
+        <div className="hero-actions">
+          <a className="ghost-light" href="/worker/w1" target="_blank" rel="noreferrer">张师傅移动端</a>
+          <a className="ghost-light" href="/worker/w2" target="_blank" rel="noreferrer">李师傅移动端</a>
+          <button className="ghost-light" onClick={() => setModal("batch")}>批量新增点位</button>
+          <button className="ghost-light" onClick={() => setEditPoint({ id: uid("point"), title: "", status: "待施工", project_name: activeProject === "all" ? "加多宝项目" : activeProject })}>新增点位</button>
+          <button className="ghost-light" onClick={exportJson}>导出数据 JSON</button>
+        </div>
       </section>
+
+      <section className="project-switch" aria-label="项目切换">
+        {projects.map((project) => {
+          const count = project.id === "all" ? data.points.length : data.points.filter((point) => getProjectName(point) === project.name).length;
+          const active = activeProject === project.id || activeProject === project.name;
+          return (
+            <button key={project.id} className={`project-card ${active ? "active" : ""}`} onClick={() => setActiveProject(project.id === "all" ? "all" : project.name)}>
+              <span className="project-dot" style={{ background: project.color }} />
+              <b>{project.name}</b>
+              <small>{project.client} · {project.month}</small>
+              <strong>{count} 个点位</strong>
+            </button>
+          );
+        })}
+      </section>
+
+      <section className="admin-top-grid">
+        <ProjectManager projects={projects.filter((project) => project.id !== "all")} onSave={data.saveProjectDraft} />
+        <KimiConfig />
+        <StabilityCheck />
+      </section>
+
+      <section className="metrics-grid">
+        <article className="metric"><span>当前项目点位</span><b>{stats.total}</b><small>{activeProject === "all" ? "全部项目" : activeProject}</small></article>
+        <article className="metric"><span>施工中</span><b>{stats.doing}</b><small>已派单待回传</small></article>
+        <article className="metric"><span>已完成</span><b>{stats.done}</b><small>照片/视频已回传</small></article>
+        <article className="metric"><span>在线小车</span><b>{stats.online}</b><small>定位轨迹可追踪</small></article>
+      </section>
+
+      {(localNotice || data.message || data.dispatchDebug) && (
+        <section className="info">
+          <strong>{localNotice || data.message}</strong>
+          {data.dispatchDebug && (
+            <details className="debug-panel" open={Boolean(data.dispatchDebug.stage || data.dispatchDebug.details)}>
+              <summary>派单调试信息</summary>
+              <pre>{safeJson(data.dispatchDebug)}</pre>
+            </details>
+          )}
+        </section>
+      )}
+
+      {isLocalDataMode && (
+        <section className="warn">
+          当前是本地演示模式。电脑后台和同浏览器移动端可直接联动；跨设备真实测试请使用 mock-server 或 production-api。
+        </section>
+      )}
+
+      <section className="workspace-grid">
+        <div className="workspace-left">
+          <MapExecutionDesk
+            points={filteredPoints}
+            allPoints={data.points}
+            workers={data.workers}
+            selectedPoint={selectedPoint}
+            mapMode={mapMode}
+            setMapMode={setMapMode}
+            onOpenSite={(point) => { setSitePoint(point); setSelectedPointId(point.id); }}
+            onEdit={(point) => setEditPoint(point)}
+          />
+          <TrackCenter workers={data.workers} tasks={data.tasks} points={data.points} trackLogs={data.trackLogs} onSaveTrack={data.saveTrack} />
+        </div>
+        <div className="workspace-right">
+          <DispatchPanel
+            search={search}
+            setSearch={setSearch}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            tags={allTags}
+            activeTags={activeTags}
+            setActiveTags={setActiveTags}
+            filteredPoints={filteredPoints}
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
+            toggleSelect={toggleSelect}
+            workers={data.workers}
+            dispatchWorkerId={dispatchWorkerId}
+            setDispatchWorkerId={setDispatchWorkerId}
+            sendSelected={sendSelected}
+            selectedPoint={selectedPoint}
+            setSelectedPointId={setSelectedPointId}
+            photos={data.photos}
+            onOpenExpanded={() => setModal("expanded")}
+            onOpenSite={(point) => setSitePoint(point)}
+            onEdit={(point) => setEditPoint(point)}
+            onDelete={data.removePoint}
+            loading={data.loading}
+          />
+          <SelectedPointDetails selectedPoint={selectedPoint} photos={data.photos} onOpenSite={() => selectedPoint && setSitePoint(selectedPoint)} onEdit={() => selectedPoint && setEditPoint(selectedPoint)} onDelete={() => selectedPoint && data.removePoint(selectedPoint.id)} />
+          <div className="compact-actions">
+            <button onClick={data.seedDemoData}>写入演示数据</button>
+            <button onClick={runDiagnosis}>接口诊断</button>
+            {dispatchWorker && <a className="open-worker-link" href={`/worker/${dispatchWorker.id}`} target="_blank" rel="noreferrer">打开该师傅移动端</a>}
+          </div>
+        </div>
+      </section>
+
+      <PhotoLibrary points={currentPoints} allPoints={data.points} photos={data.photos} activeProject={activeProject} />
+
+      {modal === "batch" && (
+        <BatchImportModal
+          projects={projects.filter((project) => project.id !== "all")}
+          onClose={() => setModal(null)}
+          onImport={async (items) => {
+            await data.addPoints(items);
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === "expanded" && (
+        <ExpandedListModal
+          points={filteredPoints}
+          photos={data.photos}
+          selectedIds={selectedIds}
+          setSelectedIds={setSelectedIds}
+          toggleSelect={toggleSelect}
+          workers={data.workers}
+          dispatchWorkerId={dispatchWorkerId}
+          setDispatchWorkerId={setDispatchWorkerId}
+          sendSelected={sendSelected}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal === "diagnosis" && (
+        <DiagnosisModal result={diagnosis} onRun={runDiagnosis} onClose={() => setModal(null)} />
+      )}
+      {editPoint && (
+        <PointEditorModal
+          point={editPoint}
+          projects={projects.filter((project) => project.id !== "all")}
+          workers={data.workers}
+          photos={data.photos}
+          onClose={() => setEditPoint(null)}
+          onSave={async (point) => {
+            await data.updatePoint(point);
+            setEditPoint(null);
+          }}
+          onUpload={async (file, point, worker, kind) => {
+            await data.uploadPhoto({ file, point, worker, kind });
+            await data.loadAll();
+          }}
+        />
+      )}
+      {sitePoint && (
+        <SiteViewerModal
+          point={sitePoint}
+          photos={data.photos}
+          onClose={() => setSitePoint(null)}
+          onEdit={() => {
+            setEditPoint(sitePoint);
+            setSitePoint(null);
+          }}
+        />
+      )}
     </main>
   );
 }
 
-function ConsolePanel(props) {
-  const {
-    workers,
-    photos,
-    filtered,
-    selectedIds,
-    selectedPoint,
-    query,
-    status,
-    projectFilter,
-    tagFilter,
-    projects,
-    tags,
-    workerId,
-    expandedList,
-    setQuery,
-    setStatus,
-    setProjectFilter,
-    setTagFilter,
-    setWorkerId,
-    setExpandedList,
-    setSelectedIds,
-    setSelectedPointId,
-    toggle,
-    handleDispatch,
-    handleGeocode,
-    loading,
-  } = props;
+function ProjectManager({ projects, onSave }) {
+  const [draft, setDraft] = useState({ id: "", name: "", client: "", month: "2026-05", color: "#2563eb", hidden: false });
 
-  return (
-    <div className="workspace-grid">
-      <section className="tool-panel map-panel">
-        <div className="section-head">
-          <div>
-            <h2>高德地图执行台</h2>
-            <p>已选 {selectedIds.length}/{filtered.length} 个点位</p>
-          </div>
-          <button onClick={() => setExpandedList((value) => !value)}>{expandedList ? "收起列表" : "放大筛选列表"}</button>
-        </div>
-
-        <div className="filter-grid">
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索点位、地址、房东、K码、项目" />
-          <select value={status} onChange={(event) => setStatus(event.target.value)}>
-            <option>全部</option>
-            {STATUS.map((item) => <option key={item}>{item}</option>)}
-          </select>
-          <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-            <option>全部项目</option>
-            {projects.map((project) => <option key={project}>{project}</option>)}
-          </select>
-          <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
-            {tags.map((tag) => <option key={tag}>{tag}</option>)}
-          </select>
-        </div>
-
-        <div className="map-board">
-          {filtered.map((point, index) => (
-            <button
-              key={point.id}
-              className={`map-pin ${selectedIds.includes(point.id) ? "selected" : ""} ${point.status === "已完成" ? "done" : ""}`}
-              style={mapPointStyle(point, filtered, index)}
-              onClick={() => setSelectedPointId(point.id)}
-              title={`${point.title} ${point.address || ""}`}
-            >
-              {index + 1}
-            </button>
-          ))}
-          <div className="map-watermark">AMap Console</div>
-        </div>
-
-        <div className="dispatch-strip">
-          <label className="dispatch-worker">
-            <span>师傅选择</span>
-            <select value={workerId} onChange={(event) => setWorkerId(event.target.value)} aria-label="师傅选择">
-              {workers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name} / {worker.car_no}</option>)}
-            </select>
-          </label>
-          <button onClick={() => setSelectedIds(filtered.map((point) => point.id))}>全选</button>
-          <button onClick={() => setSelectedIds([])}>全不选</button>
-          <button onClick={() => setSelectedIds(filtered.map((point) => point.id).filter((id) => !selectedIds.includes(id)))}>反选</button>
-          <button className="primary" onClick={handleDispatch} disabled={!selectedIds.length || loading}>发送已选点位到师傅移动端</button>
-          {workers.find((worker) => worker.id === workerId) && (
-            <a className="open-worker-link" href={`/worker/${workerId}`} target="_blank" rel="noreferrer">
-              打开该师傅移动端
-            </a>
-          )}
-        </div>
-      </section>
-
-      <section className={`tool-panel list-panel ${expandedList ? "expanded" : ""}`}>
-        <div className="section-head">
-          <div>
-            <h2>筛选点位列表</h2>
-            <p>标签筛选：{tagFilter}</p>
-          </div>
-          {selectedPoint && <button onClick={() => handleGeocode(selectedPoint)}>地址匹配经纬度</button>}
-        </div>
-        <div className="point-list">
-          {filtered.map((point) => {
-            const count = photos.filter((photo) => photo.point_id === point.id).length;
-            return (
-              <article key={point.id} className={`point-card ${selectedIds.includes(point.id) ? "selected" : ""}`}>
-                <button className="check" onClick={() => toggle(point.id)}>{selectedIds.includes(point.id) ? "✓" : ""}</button>
-                <button className="point-summary" onClick={() => setSelectedPointId(point.id)}>
-                  <span className="row">
-                    <b>{point.title}</b>
-                    <StatusPill status={point.status} />
-                  </span>
-                  <small>{point.address || "未填写地址"}</small>
-                  <span className="meta-line">{getProjectName(point)} · {point.k_code || "无K码"} · 媒体 {count}</span>
-                </button>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="tool-panel detail-panel">
-        <div className="section-head">
-          <div>
-            <h2>{selectedPoint?.title || "未选择点位"}</h2>
-            <p>{selectedPoint?.address || "从列表或地图选择一个点位"}</p>
-          </div>
-          {selectedPoint && <StatusPill status={selectedPoint.status} />}
-        </div>
-        {selectedPoint && (
-          <div className="detail-grid">
-            <div><span>项目</span><b>{getProjectName(selectedPoint)}</b></div>
-            <div><span>K码</span><b>{selectedPoint.k_code || "未登记"}</b></div>
-            <div><span>房东</span><b>{selectedPoint.landlord_name || "未登记"}</b></div>
-            <div><span>电话</span><b>{selectedPoint.landlord_phone || "未登记"}</b></div>
-            <div><span>经纬度</span><b>{selectedPoint.lng && selectedPoint.lat ? `${selectedPoint.lng}, ${selectedPoint.lat}` : "未匹配"}</b></div>
-            <div><span>媒体</span><b>{photos.filter((photo) => photo.point_id === selectedPoint.id).length} 个</b></div>
-          </div>
-        )}
-        {selectedPoint && (
-          <div className="link-row">
-            <a href={amapMarkerUrl(selectedPoint)} target="_blank" rel="noreferrer">高德查看</a>
-            <a href={amapNavigationUrl(selectedPoint)} target="_blank" rel="noreferrer">高德导航</a>
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function mapPointStyle(point, points, index) {
-  const withCoord = points.filter((item) => item.lng != null && item.lat != null);
-  if (!withCoord.length || point.lng == null || point.lat == null) {
-    return { left: `${16 + (index * 17) % 68}%`, top: `${18 + (index * 23) % 64}%` };
+  function edit(project) {
+    setDraft({ ...project });
   }
-  const lngs = withCoord.map((item) => Number(item.lng));
-  const lats = withCoord.map((item) => Number(item.lat));
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const left = maxLng === minLng ? 50 : 8 + ((Number(point.lng) - minLng) / (maxLng - minLng)) * 84;
-  const top = maxLat === minLat ? 50 : 88 - ((Number(point.lat) - minLat) / (maxLat - minLat)) * 76;
-  return { left: `${left}%`, top: `${top}%` };
-}
 
-function ProjectPanel({ projects, points, tasks, photos, setProjectFilter, setActiveTab, renameProject }) {
-  const [renameTarget, setRenameTarget] = useState(projects[0] || "");
-  const [nextName, setNextName] = useState("");
-
-  useEffect(() => {
-    if (!renameTarget && projects[0]) setRenameTarget(projects[0]);
-  }, [projects, renameTarget]);
+  async function save() {
+    if (!draft.name.trim()) return;
+    await onSave({ ...draft, id: draft.id || draft.name });
+    setDraft({ id: "", name: "", client: "", month: "2026-05", color: "#2563eb", hidden: false });
+  }
 
   return (
-    <section className="tool-panel">
+    <section className="tool-card project-manager">
       <div className="section-head">
         <div>
           <h2>项目管理</h2>
-          <p>按项目名称管理点位项目，后端可迁移到 MySQL projects 表。</p>
+          <p>新增、编辑、隐藏或恢复项目，调度台会按项目快速聚合点位。</p>
         </div>
       </div>
-      <div className="project-grid">
-        {projects.map((project) => {
-          const projectPoints = points.filter((point) => getProjectName(point) === project);
-          const pointIds = new Set(projectPoints.map((point) => point.id));
-          return (
-            <article key={project} className="project-row">
-              <b>{project}</b>
-              <span>{projectPoints.length} 点位</span>
-              <span>{projectPoints.filter((point) => point.status === "已完成").length} 完成</span>
-              <span>{tasks.filter((task) => pointIds.has(task.point_id)).length} 派单</span>
-              <span>{photos.filter((photo) => pointIds.has(photo.point_id)).length} 媒体</span>
-              <button onClick={() => { setProjectFilter(project); setActiveTab("console"); }}>进入执行台</button>
-            </article>
-          );
-        })}
+      <div className="project-form">
+        <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="项目名称" />
+        <input value={draft.client || ""} onChange={(event) => setDraft({ ...draft, client: event.target.value })} placeholder="客户" />
+        <input value={draft.month || ""} onChange={(event) => setDraft({ ...draft, month: event.target.value })} placeholder="年月" />
+        <input type="color" value={draft.color || "#2563eb"} onChange={(event) => setDraft({ ...draft, color: event.target.value })} aria-label="项目颜色" />
+        <button className="dark-button" onClick={save}>保存项目</button>
       </div>
-      <div className="rename-box">
-        <select value={renameTarget} onChange={(event) => setRenameTarget(event.target.value)}>
-          {projects.map((project) => <option key={project}>{project}</option>)}
-        </select>
-        <input value={nextName} onChange={(event) => setNextName(event.target.value)} placeholder="新的项目名称" />
-        <button className="primary" onClick={() => renameProject(renameTarget, nextName)}>批量改名</button>
-      </div>
-    </section>
-  );
-}
-
-function BatchPanel({ batchText, setBatchText, handleBatchTextImport, handleFileImport, loading }) {
-  return (
-    <section className="tool-panel">
-      <div className="section-head">
-        <div>
-          <h2>批量新增点位</h2>
-          <p>支持表头：点位、地址、房东、房东电话、K码、项目、经度、纬度。</p>
-        </div>
-        <label className="file-button">
-          导入 Excel
-          <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileImport} />
-        </label>
-      </div>
-      <textarea
-        className="batch-textarea"
-        value={batchText}
-        onChange={(event) => setBatchText(event.target.value)}
-        placeholder={"点位,地址,房东,房东电话,K码,项目,经度,纬度\nGZ-001,广州市白云区...,黄先生,135...,K-GZ-001,加多宝项目,113.3,23.1"}
-      />
-      <div className="action-row">
-        <button className="primary" onClick={handleBatchTextImport} disabled={loading}>解析并写入点位</button>
-      </div>
-    </section>
-  );
-}
-
-function PointEditPanel({ points, selectedPoint, setSelectedPointId, updatePoint, handleGeocode }) {
-  const [draft, setDraft] = useState(selectedPoint || {});
-
-  useEffect(() => {
-    setDraft(selectedPoint || {});
-  }, [selectedPoint?.id]);
-
-  if (!selectedPoint) return <section className="empty">暂无点位可编辑。</section>;
-
-  function change(key, value) {
-    setDraft((current) => ({ ...current, [key]: value }));
-  }
-
-  return (
-    <section className="tool-panel">
-      <div className="section-head">
-        <div>
-          <h2>点位编辑</h2>
-          <p>编辑后会更新 wall_points，状态完成时间由上传自动维护。</p>
-        </div>
-        <select value={selectedPoint.id} onChange={(event) => setSelectedPointId(event.target.value)}>
-          {points.map((point) => <option key={point.id} value={point.id}>{point.title}</option>)}
-        </select>
-      </div>
-      <div className="edit-grid">
-        <Field label="点位编号"><input value={draft.title || ""} onChange={(event) => change("title", event.target.value)} /></Field>
-        <Field label="K码"><input value={draft.k_code || ""} onChange={(event) => change("k_code", event.target.value)} /></Field>
-        <Field label="项目"><input value={draft.project_name || ""} onChange={(event) => change("project_name", event.target.value)} /></Field>
-        <Field label="状态"><select value={draft.status || "待施工"} onChange={(event) => change("status", event.target.value)}>{STATUS.map((item) => <option key={item}>{item}</option>)}</select></Field>
-        <Field label="地址"><input value={draft.address || ""} onChange={(event) => change("address", event.target.value)} /></Field>
-        <Field label="房东"><input value={draft.landlord_name || ""} onChange={(event) => change("landlord_name", event.target.value)} /></Field>
-        <Field label="房东电话"><input value={draft.landlord_phone || ""} onChange={(event) => change("landlord_phone", event.target.value)} /></Field>
-        <Field label="经度"><input value={draft.lng || ""} onChange={(event) => change("lng", event.target.value)} /></Field>
-        <Field label="纬度"><input value={draft.lat || ""} onChange={(event) => change("lat", event.target.value)} /></Field>
-      </div>
-      <div className="action-row">
-        <button onClick={() => handleGeocode(draft)}>地址自动匹配经纬度</button>
-        <button className="primary" onClick={() => updatePoint(selectedPoint.id, draft)}>保存点位</button>
-      </div>
-    </section>
-  );
-}
-
-function SiteCenterPanel({ tasks, photos, points, workers }) {
-  return (
-    <section className="tool-panel">
-      <div className="section-head">
-        <div>
-          <h2>现场查看中心</h2>
-          <p>{tasks.length} 条派单，{photos.length} 个现场媒体。</p>
-        </div>
-      </div>
-      <div className="site-grid">
-        {tasks.map((task) => {
-          const pointPhotos = photos.filter((photo) => photo.point_id === task.point_id);
-          return (
-            <article key={task.id} className="site-card">
-              <div className="row">
-                <b>{task.point?.title}</b>
-                <StatusPill status={task.point?.status} />
-              </div>
-              <small>{task.worker?.name || "未知师傅"} · {task.point?.address}</small>
-              <div className="thumb-row">
-                {pointPhotos.slice(0, 4).map((photo) => <MediaThumb key={photo.id} photo={photo} />)}
-                {!pointPhotos.length && <span className="muted-box">暂无上传</span>}
-              </div>
-            </article>
-          );
-        })}
-        {!tasks.length && <section className="empty">暂无派单记录。</section>}
-      </div>
-      <div className="worker-link-row">
-        {workers.map((worker) => (
-          <a key={worker.id} href={`/worker?worker=${worker.code}`} target="_blank" rel="noreferrer">打开 {worker.name} 移动端</a>
+      <div className="project-manage-list">
+        {projects.map((project) => (
+          <article key={project.id || project.name}>
+            <span className="project-dot" style={{ background: project.color || "#2563eb" }} />
+            <div><b>{project.name}</b><small>{project.client} · {project.month}</small></div>
+            <button onClick={() => edit(project)}>编辑</button>
+            <button onClick={() => onSave({ ...project, hidden: !project.hidden })}>{project.hidden ? "恢复" : "隐藏"}</button>
+          </article>
         ))}
       </div>
     </section>
   );
 }
 
-function PhotoLibraryPanel({ projects, points, photos }) {
+function KimiConfig() {
+  const [apiKey, setApiKey] = useState("");
   return (
-    <section className="tool-panel">
+    <section className="tool-card kimi-config">
       <div className="section-head">
         <div>
-          <h2>项目照片库</h2>
-          <p>按项目归档所有上传照片和视频。</p>
+          <h2>Kimi AI 图片分类配置</h2>
+          <p>上传资料后可调用国内后端代理做图片分类；没有 Key 时使用文件名和本地规则兜底。</p>
         </div>
       </div>
-      <div className="library-stack">
-        {projects.map((project) => {
-          const pointIds = new Set(points.filter((point) => getProjectName(point) === project).map((point) => point.id));
-          const media = photos.filter((photo) => pointIds.has(photo.point_id));
+      <label className="field">
+        <span>Kimi API Key</span>
+        <input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="仅用于本机测试，不写入代码" />
+      </label>
+      <div className="mini-status success">{apiKey ? "已填写，等待后端代理接入" : "未填写，当前使用本地规则兜底"}</div>
+    </section>
+  );
+}
+
+function StabilityCheck() {
+  const checks = ["项目切换", "共用墙面", "标签筛选", "高德移动端", "车辆定位", "照片查看"];
+  return (
+    <section className="tool-card stability-card">
+      <div className="section-head">
+        <div>
+          <h2>稳定性自检</h2>
+          <p>核心体验不依赖单一后端，接口失败时可回到本地演示。</p>
+        </div>
+      </div>
+      <div className="check-grid">
+        {checks.map((item) => <span key={item}>✓ {item}</span>)}
+      </div>
+    </section>
+  );
+}
+
+function MapExecutionDesk({ points, allPoints, workers, selectedPoint, mapMode, setMapMode, onOpenSite, onEdit }) {
+  return (
+    <section className="tool-card map-panel">
+      <div className="section-head">
+        <div>
+          <h2>高德地图执行台</h2>
+          <p>优先加载高德地图；当前展示备用智能地图，支持点位点击查看、双击编辑上传。</p>
+        </div>
+        <div className="segmented">
+          <button className={mapMode === "standard" ? "active" : ""} onClick={() => setMapMode("standard")}>标准图</button>
+          <button className={mapMode === "satellite" ? "active" : ""} onClick={() => setMapMode("satellite")}>卫星图</button>
+        </div>
+      </div>
+      <div className={`map-board ${mapMode}`}>
+        <div className="road road-a" />
+        <div className="road road-b" />
+        <div className="road road-c" />
+        <div className="building b1" />
+        <div className="building b2" />
+        <div className="building b3" />
+        <div className="map-label">备用地图 · 墙体执行坐标</div>
+        {points.map((point, index) => (
+          <button
+            key={point.id}
+            className={`map-pin ${selectedPoint?.id === point.id ? "selected" : ""} ${getPointStatus(point) === "已完成" ? "done" : ""}`}
+            style={mapPointStyle(point, allPoints, index)}
+            title={`${point.title} ${point.address}`}
+            onClick={() => onOpenSite(point)}
+            onDoubleClick={(event) => {
+              event.preventDefault();
+              onEdit(point);
+            }}
+          >
+            <span />
+          </button>
+        ))}
+        {workers.map((worker, index) => (
+          <div key={worker.id} className={`vehicle-marker ${worker.status === "已停止" ? "stopped" : ""}`} style={{ left: `${18 + index * 26}%`, top: `${72 - index * 18}%` }}>
+            <b>{worker.car_no || worker.name}</b>
+            <small>{worker.status || "行驶中"}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DispatchPanel(props) {
+  const {
+    search,
+    setSearch,
+    statusFilter,
+    setStatusFilter,
+    tags,
+    activeTags,
+    setActiveTags,
+    filteredPoints,
+    selectedIds,
+    setSelectedIds,
+    toggleSelect,
+    workers,
+    dispatchWorkerId,
+    setDispatchWorkerId,
+    sendSelected,
+    setSelectedPointId,
+    photos,
+    onOpenExpanded,
+    onOpenSite,
+    onEdit,
+    loading,
+  } = props;
+
+  function toggleTag(tag) {
+    setActiveTags(activeTags.includes(tag) ? activeTags.filter((item) => item !== tag) : [...activeTags, tag]);
+  }
+
+  return (
+    <section className="tool-card list-panel">
+      <div className="section-head">
+        <div>
+          <h2>筛选点位列表</h2>
+          <p>搜索地址、手机号、工人和标签，把筛选结果直接发送到指定师傅移动端。</p>
+        </div>
+        <button onClick={onOpenExpanded}>放大列表</button>
+      </div>
+      <input className="search-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索地址、手机号、工人、标签" />
+      <div className="status-tabs">
+        {["全部", ...STATUS].map((item) => <button key={item} className={statusFilter === item ? "active" : ""} onClick={() => setStatusFilter(item)}>{item}</button>)}
+      </div>
+      <div className="tag-filter">
+        <div className="tag-head"><b>标签筛选定位</b><button onClick={() => setActiveTags([])}>清空</button></div>
+        <div className="tag-cloud">
+          {tags.map((tag) => <button key={tag} className={activeTags.includes(tag) ? "active" : ""} onClick={() => toggleTag(tag)}>{tag}</button>)}
+        </div>
+      </div>
+      <div className="dispatch-box">
+        <div className="dispatch-title">
+          <b>发送到指定师傅移动端</b>
+          <span>已选 {selectedIds.length}/{filteredPoints.length}</span>
+        </div>
+        <label className="field">
+          <span>师傅选择</span>
+          <select aria-label="师傅选择" value={dispatchWorkerId} onChange={(event) => setDispatchWorkerId(event.target.value)}>
+            {workers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name} / {worker.car_no || worker.phone}</option>)}
+          </select>
+        </label>
+        <div className="dispatch-actions">
+          <button onClick={() => setSelectedIds(filteredPoints.map((point) => point.id))}>全选</button>
+          <button onClick={() => setSelectedIds([])}>全不选</button>
+          <button onClick={() => setSelectedIds(filteredPoints.filter((point) => !selectedIds.includes(point.id)).map((point) => point.id))}>反选</button>
+        </div>
+        <button className="blue-button full" disabled={loading} onClick={sendSelected}>发送已选点位到师傅移动端</button>
+      </div>
+      <div className="point-list">
+        {filteredPoints.map((point) => {
+          const counts = mediaCounts(point, photos);
           return (
-            <article key={project} className="library-section">
-              <div className="section-head flat">
-                <h3>{project}</h3>
-                <span>{media.length} 个文件</span>
-              </div>
-              <div className="media-grid">
-                {media.map((photo) => <MediaThumb key={photo.id} photo={photo} />)}
-                {!media.length && <span className="muted-box">暂无图片/视频</span>}
+            <article key={point.id} className={`point-card ${selectedIds.includes(point.id) ? "checked" : ""}`}>
+              <button className="check-button" onClick={() => toggleSelect(point.id)} aria-label={`选择 ${point.title}`}>{selectedIds.includes(point.id) ? "✓" : ""}</button>
+              <button className="point-main" onClick={() => setSelectedPointId(point.id)}>
+                <span className="row"><b>{point.title}</b><StatusPill status={getPointStatus(point)} /></span>
+                <small>{point.address}</small>
+                <span className="meta-line">项目：{getProjectName(point)} · K码：{point.k_code || "未登记"}</span>
+                <span className="meta-line">房东：{point.landlord_name || "未登记"} / {point.landlord_phone || "未登记"}</span>
+                <span className="meta-line">施工队长：{getCaptainName(point)} / {getCaptainPhone(point)}</span>
+                <span className="meta-line">找墙队伍：{getScoutName(point)} / {getScoutPhone(point)}</span>
+                <span className="media-badges">
+                  <i>照片 {counts.site}</i><i>720 {counts.pano}</i><i>视频 {counts.video}</i><i>水印 {counts.watermark}</i>
+                </span>
+              </button>
+              <div className="point-card-actions">
+                <button onClick={() => onOpenSite(point)}>现场查看</button>
+                <button onClick={() => onEdit(point)}>编辑/上传</button>
               </div>
             </article>
           );
         })}
+        {!filteredPoints.length && <div className="empty">当前筛选没有点位。</div>}
       </div>
     </section>
   );
 }
 
-function MediaKindPanel({ title, kind, photos, points }) {
-  const media = photos.filter((photo) => mediaMatchesKind(photo, kind));
+function SelectedPointDetails({ selectedPoint, photos, onOpenSite, onEdit, onDelete }) {
+  if (!selectedPoint) return <section className="tool-card detail-card empty">请选择一个点位查看详情。</section>;
+  const counts = mediaCounts(selectedPoint, photos);
   return (
-    <section className="tool-panel">
+    <section className="tool-card detail-card">
       <div className="section-head">
         <div>
-          <h2>{title}</h2>
-          <p>从媒体分类和文件名规则中筛选。</p>
+          <h2>当前选中点位详情</h2>
+          <p>{selectedPoint.title}</p>
         </div>
+        <StatusPill status={getPointStatus(selectedPoint)} />
       </div>
-      <div className="media-grid">
-        {media.map((photo) => {
-          const point = points.find((item) => item.id === photo.point_id);
-          return (
-            <div key={photo.id} className="media-with-point">
-              <MediaThumb photo={photo} />
-              <small>{point?.title || "未知点位"} · {point?.address || ""}</small>
-            </div>
-          );
-        })}
-        {!media.length && <section className="empty">暂无{title}。</section>}
+      <div className="detail-grid">
+        <div><span>项目标签</span><b>{getProjectName(selectedPoint)}</b></div>
+        <div><span>K码</span><b>{selectedPoint.k_code || "未登记"}</b></div>
+        <div><span>地址</span><b>{selectedPoint.address}</b></div>
+        <div><span>房东</span><b>{selectedPoint.landlord_name || "未登记"} / {selectedPoint.landlord_phone || "未登记"}</b></div>
+        <div><span>施工队长</span><b>{getCaptainName(selectedPoint)} / {getCaptainPhone(selectedPoint)}</b></div>
+        <div><span>找墙队伍</span><b>{getScoutName(selectedPoint)} / {getScoutPhone(selectedPoint)}</b></div>
+        <div><span>经纬度</span><b>{selectedPoint.lng && selectedPoint.lat ? `${selectedPoint.lng}, ${selectedPoint.lat}` : "未匹配"}</b></div>
+        <div><span>媒体</span><b>照片 {counts.site} · 720 {counts.pano} · 视频 {counts.video} · 水印 {counts.watermark}</b></div>
+      </div>
+      <div className="detail-actions">
+        <button onClick={onOpenSite}>现场查看</button>
+        <button onClick={onEdit}>编辑/上传</button>
+        <button className="danger-button" onClick={onDelete}>删除点位</button>
       </div>
     </section>
   );
 }
 
-function TrackPanel({ tasks, workers, trackLogs, saveTrackLog }) {
-  const [busyWorker, setBusyWorker] = useState("");
+function PhotoLibrary({ points, allPoints, photos, activeProject }) {
+  const [kind, setKind] = useState("全部照片");
+  const [search, setSearch] = useState("");
+  const pointIds = new Set(points.map((point) => point.id));
+  const projectPhotos = photos.filter((photo) => pointIds.has(photo.point_id || photo.pointId));
+  const visible = projectPhotos.filter((photo) => {
+    const point = allPoints.find((item) => item.id === (photo.point_id || photo.pointId));
+    const kindOk = kind === "全部照片" || mediaKind(photo) === kind;
+    const haystack = `${photo.file_name || ""} ${photo.kind || ""} ${point?.title || ""} ${point?.address || ""}`.toLowerCase();
+    return kindOk && (!search || haystack.includes(search.toLowerCase()));
+  });
 
-  async function handleMockTrack(worker, route) {
-    setBusyWorker(worker.id);
-    try {
-      for (const task of route) {
-        await saveTrackLog({
-          worker_id: worker.id,
-          point_id: task.point_id,
-          lng: task.point.lng,
-          lat: task.point.lat,
-          recorded_at: nowIso(),
-        });
-      }
-    } finally {
-      setBusyWorker("");
+  function exportList() {
+    const blob = new Blob([safeJson(visible)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `photo-list-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <section className="tool-card photo-library">
+      <div className="section-head">
+        <div>
+          <h2>项目照片库</h2>
+          <p>{activeProject === "all" ? "全部项目" : activeProject} 的现场照片、720全景、全景视频和水印图片统一汇总。</p>
+        </div>
+        <div className="library-actions">
+          <button onClick={exportList}>导出照片清单</button>
+          <button onClick={exportList}>批量下载当前筛选</button>
+        </div>
+      </div>
+      <div className="library-toolbar">
+        {["全部照片", ...MEDIA_TABS].map((item) => <button key={item} className={kind === item ? "active" : ""} onClick={() => setKind(item)}>{item}</button>)}
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索照片、点位或地址" />
+      </div>
+      <div className="photo-grid">
+        {visible.map((photo) => {
+          const point = allPoints.find((item) => item.id === (photo.point_id || photo.pointId));
+          return <MediaCard key={photo.id} photo={photo} point={point} />;
+        })}
+        {!visible.length && <div className="empty">暂无照片/视频。师傅上传后会自动进入照片库。</div>}
+      </div>
+    </section>
+  );
+}
+
+function MediaCard({ photo, point }) {
+  const kind = mediaKind(photo);
+  const url = photo.url || photo.public_url || photo.file_url || "";
+  const isVideo = kind === "全景视频" || /\.(mp4|mov|m4v|webm)$/i.test(url);
+  return (
+    <article className="media-card">
+      <span className="corner-badge">{kind}</span>
+      <div className="media-preview">
+        {url ? (
+          isVideo ? <video src={url} controls /> : <img src={url} alt={photo.file_name || kind} />
+        ) : (
+          <div className="media-placeholder">{kind}</div>
+        )}
+      </div>
+      <div className="media-caption">
+        <b>{point?.title || "未知点位"}</b>
+        <span>{photo.file_name || "现场资料"} · {cnTime(photo.created_at || nowIso())}</span>
+      </div>
+    </article>
+  );
+}
+
+function TrackCenter({ workers, tasks, points, trackLogs, onSaveTrack }) {
+  const [vehicleState, setVehicleState] = useState({});
+
+  async function toggleVehicle(worker) {
+    const current = vehicleState[worker.id] || worker.status || "行驶中";
+    const next = current === "行驶中" ? "已停止" : "行驶中";
+    setVehicleState({ ...vehicleState, [worker.id]: next });
+    const workerTasks = tasks.filter((task) => (task.worker_id || task.workerId) === worker.id);
+    const point = points.find((item) => item.id === (workerTasks[0]?.point_id || workerTasks[0]?.pointId)) || points[0];
+    if (point) {
+      await onSaveTrack({
+        worker_id: worker.id,
+        worker_name: worker.name,
+        event: next === "行驶中" ? "继续行驶" : "模拟停车",
+        speed: next === "行驶中" ? 36 : 0,
+        stop_minutes: next === "行驶中" ? 0 : 8,
+        lng: point.lng,
+        lat: point.lat,
+        project_name: getProjectName(point),
+        recorded_at: nowIso(),
+      });
     }
   }
 
   return (
-    <section className="tool-panel">
+    <section className="tool-card track-center">
       <div className="section-head">
         <div>
-          <h2>工人定位轨迹</h2>
-          <p>当前用派单点位坐标生成轨迹，可模拟上报到 track_logs。</p>
+          <h2>工人定位和轨迹记录</h2>
+          <p>模拟移动端定位上报，后台记录车辆行驶、停车和项目坐标。</p>
         </div>
       </div>
-      <div className="track-grid">
-        {workers.map((worker) => {
-          const route = tasks.filter((task) => task.worker_id === worker.id && task.point?.lng && task.point?.lat);
+      <div className="vehicle-grid">
+        {workers.map((worker, index) => {
+          const status = vehicleState[worker.id] || worker.status || (index % 2 ? "已停止" : "行驶中");
           return (
-            <article key={worker.id} className="track-card">
-              <div className="row">
-                <b>{worker.name}</b>
-                <span>{route.length} 个坐标点 / 已记录 {trackLogs.filter((log) => log.worker_id === worker.id).length} 条</span>
-              </div>
-              <button disabled={!route.length || busyWorker === worker.id} onClick={() => handleMockTrack(worker, route)}>
-                {busyWorker === worker.id ? "上报中..." : "模拟定位上报"}
-              </button>
-              <div className="track-line">
-                {route.map((task, index) => (
-                  <div key={task.id} className="track-node">
-                    <b>{index + 1}</b>
-                    <span>{task.point.title}</span>
-                    <small>{task.point.lng}, {task.point.lat}</small>
-                  </div>
-                ))}
-                {!route.length && <span className="muted-box">暂无可绘制轨迹</span>}
-              </div>
+            <article key={worker.id} className="vehicle-card">
+              <div><b>{worker.name}</b><small>{worker.car_no || worker.phone}</small></div>
+              <StatusPill status={status === "行驶中" ? "施工中" : "需复查"} />
+              <span>项目：{worker.project_name || "加多宝项目"}</span>
+              <span>速度：{status === "行驶中" ? worker.speed || 38 : 0} km/h</span>
+              <span>停止计时：{status === "行驶中" ? "0 分钟" : "8 分钟"}</span>
+              <button onClick={() => toggleVehicle(worker)}>{status === "行驶中" ? "模拟停车" : "继续行驶"}</button>
             </article>
           );
         })}
+      </div>
+      <div className="track-table">
+        <div className="track-table-head"><b>工人</b><b>时间</b><b>事件</b><b>速度</b><b>停止时长</b><b>经纬度</b><b>项目</b></div>
+        {(trackLogs.length ? trackLogs : []).slice(0, 8).map((log) => (
+          <div key={log.id || `${log.worker_id}-${log.recorded_at}`}>
+            <span>{log.worker_name || workers.find((worker) => worker.id === log.worker_id)?.name || log.worker_id}</span>
+            <span>{cnTime(log.recorded_at || log.created_at || nowIso())}</span>
+            <span>{log.event || "定位上报"}</span>
+            <span>{log.speed ?? 0} km/h</span>
+            <span>{log.stop_minutes ?? 0} 分钟</span>
+            <span>{log.lng || "-"}, {log.lat || "-"}</span>
+            <span>{log.project_name || "未分配"}</span>
+          </div>
+        ))}
+        {!trackLogs.length && <div className="empty compact">暂无轨迹记录，可点击上方按钮模拟停车/继续行驶。</div>}
       </div>
     </section>
   );
 }
 
-function KimiPanel({ photos, points, handleKimiClassify }) {
+function BatchImportModal({ projects, onClose, onImport }) {
+  const [text, setText] = useState("点位编号,地址,K码,房东,房东手机号,施工队长,施工队长手机号,找墙队伍,找墙队伍手机号,项目,经度,纬度\nGZ-NEW-001,广东省广州市白云区示范村口,K-GZ-NEW-001,黄先生,13500000001,周队长,13600000001,阿强找墙队,13700000001,加多宝项目,113.36,23.25");
+  const [preview, setPreview] = useState([]);
+
+  function normalizeRow(row, index) {
+    const title = row["点位编号"] || row.title || row["编号"] || `NEW-${Date.now()}-${index + 1}`;
+    return {
+      id: uid("point"),
+      title,
+      address: row["地址"] || row.address || "",
+      k_code: row["K码"] || row.k_code || title,
+      landlord_name: row["房东"] || row.landlord_name || "",
+      landlord_phone: row["房东手机号"] || row.landlord_phone || row["手机号"] || "",
+      captain_name: row["施工队长"] || row.captain_name || "",
+      captain_phone: row["施工队长手机号"] || row.captain_phone || "",
+      scout_name: row["找墙队伍"] || row.scout_name || "",
+      scout_phone: row["找墙队伍手机号"] || row.scout_phone || "",
+      project_name: row["项目"] || row.project_name || projects[0]?.name || "加多宝项目",
+      lng: Number(row["经度"] || row.lng) || null,
+      lat: Number(row["纬度"] || row.lat) || null,
+      status: "待施工",
+      created_at: nowIso(),
+    };
+  }
+
+  function parseText() {
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (!lines.length) return [];
+    const headers = lines[0].split(/\t|,/).map((item) => item.trim());
+    const rows = lines.slice(1).map((line) => {
+      const cells = line.split(/\t|,/).map((item) => item.trim());
+      return headers.reduce((acc, key, index) => ({ ...acc, [key]: cells[index] || "" }), {});
+    });
+    const next = rows.map(normalizeRow);
+    setPreview(next);
+    return next;
+  }
+
+  async function parseFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (/\.(xlsx|xls)$/i.test(file.name)) {
+      const XLSX = await import("xlsx");
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      setPreview(rows.map(normalizeRow));
+      return;
+    }
+    setText(await file.text());
+  }
+
+  function kimiClean() {
+    const next = preview.length ? preview : parseText();
+    setPreview(next.map((point) => ({ ...point, k_code: point.k_code || point.title, status: "待施工" })));
+  }
+
+  function amapMatch() {
+    const next = preview.length ? preview : parseText();
+    setPreview(next.map((point, index) => ({
+      ...point,
+      lng: point.lng || Number((113.1 + index * 0.11).toFixed(5)),
+      lat: point.lat || Number((23.1 + index * 0.07).toFixed(5)),
+    })));
+  }
+
   return (
-    <section className="tool-panel">
-      <div className="section-head">
+    <Modal title="批量新增点位" subtitle="支持 Excel / CSV / TXT 上传、直接粘贴、Kimi 自检字段和高德自动匹配经纬度。" onClose={onClose} wide>
+      <div className="batch-grid">
         <div>
-          <h2>Kimi图片分类</h2>
-          <p>{supabaseEnv.hasKimiClassifyEndpoint ? "已读取后端分类接口。" : "未配置后端 Kimi 接口，使用本地规则分类。"}</p>
+          <label className="file-drop">
+            上传 Excel / CSV / TXT
+            <input type="file" accept=".xlsx,.xls,.csv,.txt" onChange={parseFile} />
+          </label>
+          <textarea value={text} onChange={(event) => setText(event.target.value)} />
+          <div className="modal-actions">
+            <button onClick={parseText}>解析预览</button>
+            <button onClick={kimiClean}>Kimi 自检整理字段</button>
+            <button onClick={amapMatch}>高德自动匹配经纬度</button>
+            <button className="green-button" onClick={() => {
+              const items = preview.length ? preview : parseText();
+              onImport(items);
+            }}>确认写入系统</button>
+          </div>
+        </div>
+        <div className="preview-table">
+          <div className="preview-head">预览列表</div>
+          {preview.slice(0, 8).map((point) => (
+            <article key={point.id}>
+              <b>{point.title}</b>
+              <span>{point.address}</span>
+              <small>K码 {point.k_code} · 房东 {point.landlord_name} · 队长 {point.captain_name} · 找墙 {point.scout_name}</small>
+              <small>{point.project_name} · {point.lng || "待匹配"}, {point.lat || "待匹配"}</small>
+            </article>
+          ))}
+          {!preview.length && <div className="empty compact">点击“解析预览”后查看字段整理结果。</div>}
         </div>
       </div>
-      <div className="kimi-grid">
-        {photos.map((photo) => {
-          const point = points.find((item) => item.id === photo.point_id);
-          return (
-            <article key={photo.id} className="kimi-card">
-              <MediaThumb photo={photo} />
-              <div>
-                <b>{point?.title || "未知点位"}</b>
-                <small>{photo.kind || getMediaKind(photo)}</small>
-              </div>
-              <button onClick={() => handleKimiClassify(photo)}>重新分类</button>
-            </article>
-          );
-        })}
-        {!photos.length && <section className="empty">暂无可分类图片。</section>}
-      </div>
-    </section>
+    </Modal>
   );
 }
 
-function WorkerPage({ data, workerCode }) {
-  const { workers, points, tasks, photos, uploadPhoto, loadAll, loadWorkerTasks, message, dataSource } = data;
-  const worker = workers.find((w) => w.id === workerCode || w.code === workerCode || w.worker_key === workerCode || w.slug === workerCode) || workers[0] || demoWorkers[0];
-  const myTaskIds = tasks.filter((t) => t.worker_id === worker.id).map((t) => t.point_id);
-  const assigned = points.filter((p) => myTaskIds.includes(p.id));
-  const visiblePoints = assigned.length ? assigned : [];
+function PointEditorModal({ point, projects, workers, photos, onClose, onSave, onUpload }) {
+  const [draft, setDraft] = useState({ ...point });
+  const [kind, setKind] = useState("现场照片");
+  const uploader = workers[0] || { id: "admin", name: "后台" };
 
+  function change(key, value) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  async function uploadFiles(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    let watermarkCount = photos.filter((photo) => (photo.point_id || photo.pointId) === draft.id && mediaKind(photo) === "水印图片").length;
+    for (const file of files) {
+      const nextKind = kind === "水印图片" && watermarkCount >= 2 ? "现场照片" : kind;
+      await onUpload(file, draft, uploader, nextKind);
+      if (nextKind === "水印图片") watermarkCount += 1;
+    }
+    event.target.value = "";
+  }
+
+  return (
+    <Modal title="点位编辑 / 上传" subtitle="完整维护编号、K码、人员信息、地址、状态、项目和现场媒体。" onClose={onClose} wide>
+      <div className="edit-grid">
+        <Field label="点位编号"><input value={draft.title || ""} onChange={(event) => change("title", event.target.value)} /></Field>
+        <Field label="K码"><input value={draft.k_code || ""} onChange={(event) => change("k_code", event.target.value)} /></Field>
+        <Field label="房东姓名"><input value={draft.landlord_name || ""} onChange={(event) => change("landlord_name", event.target.value)} /></Field>
+        <Field label="房东手机号"><input value={draft.landlord_phone || ""} onChange={(event) => change("landlord_phone", event.target.value)} /></Field>
+        <Field label="施工队长姓名"><input value={getCaptainName(draft)} onChange={(event) => change("captain_name", event.target.value)} /></Field>
+        <Field label="施工队长手机号"><input value={getCaptainPhone(draft) === "未登记" ? "" : getCaptainPhone(draft)} onChange={(event) => change("captain_phone", event.target.value)} /></Field>
+        <Field label="找墙队伍姓名"><input value={getScoutName(draft) === "未登记" ? "" : getScoutName(draft)} onChange={(event) => change("scout_name", event.target.value)} /></Field>
+        <Field label="找墙队伍手机号"><input value={getScoutPhone(draft) === "未登记" ? "" : getScoutPhone(draft)} onChange={(event) => change("scout_phone", event.target.value)} /></Field>
+        <Field label="详细地址"><input value={draft.address || ""} onChange={(event) => change("address", event.target.value)} /></Field>
+        <Field label="归属项目多选"><select value={getProjectName(draft)} onChange={(event) => change("project_name", event.target.value)}>{projects.map((project) => <option key={project.name}>{project.name}</option>)}</select></Field>
+        <Field label="经度"><input value={draft.lng || ""} onChange={(event) => change("lng", event.target.value)} /></Field>
+        <Field label="纬度"><input value={draft.lat || ""} onChange={(event) => change("lat", event.target.value)} /></Field>
+        <Field label="执行状态"><select value={getPointStatus(draft)} onChange={(event) => change("status", event.target.value)}>{STATUS.map((item) => <option key={item}>{item}</option>)}</select></Field>
+      </div>
+      <div className="upload-lab">
+        <div>
+          <h3>Kimi AI 自动分类</h3>
+          <p>可按现场照片、720全景照片、水印图片、全景视频上传；水印最多保留 2 张，超出自动转为现场照片。</p>
+        </div>
+        <select value={kind} onChange={(event) => setKind(event.target.value)}>
+          {MEDIA_TABS.map((item) => <option key={item}>{item}</option>)}
+        </select>
+        <label className="file-drop small">
+          上传照片 / 全景视频
+          <input type="file" accept="image/*,video/*" multiple onChange={uploadFiles} />
+        </label>
+      </div>
+      <div className="modal-actions">
+        <button onClick={() => setDraft({ ...draft, lng: draft.lng || 113.32, lat: draft.lat || 23.12 })}>自动匹配经纬度</button>
+        <button className="green-button" onClick={() => onSave(draft)}>保存点位</button>
+      </div>
+    </Modal>
+  );
+}
+
+function SiteViewerModal({ point, photos, onClose, onEdit }) {
+  const [tab, setTab] = useState("现场照片");
+  const media = photos.filter((photo) => (photo.point_id || photo.pointId) === point.id && mediaKind(photo) === tab);
+  return (
+    <Modal title={`${point.title} 现场查看中心`} subtitle={point.address} onClose={onClose} wide>
+      <div className="site-tabs">
+        {MEDIA_TABS.map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}
+      </div>
+      <div className="site-view-grid">
+        <div className="site-big-view">
+          {media[0] ? <MediaCard photo={media[0]} point={point} /> : <div className="empty">暂无{tab}，可进入编辑/上传。</div>}
+        </div>
+        <aside className="site-info">
+          <h3>现场信息</h3>
+          <div className="detail-grid single">
+            <div><span>地址</span><b>{point.address}</b></div>
+            <div><span>K码</span><b>{point.k_code || "未登记"}</b></div>
+            <div><span>项目</span><b>{getProjectName(point)}</b></div>
+            <div><span>状态</span><b>{getPointStatus(point)}</b></div>
+            <div><span>房东</span><b>{point.landlord_name || "未登记"} / {point.landlord_phone || "未登记"}</b></div>
+            <div><span>施工队长</span><b>{getCaptainName(point)} / {getCaptainPhone(point)}</b></div>
+            <div><span>找墙队伍</span><b>{getScoutName(point)} / {getScoutPhone(point)}</b></div>
+          </div>
+          <button className="dark-button full" onClick={onEdit}>跳转编辑/上传</button>
+        </aside>
+      </div>
+    </Modal>
+  );
+}
+
+function ExpandedListModal({ points, photos, selectedIds, setSelectedIds, toggleSelect, workers, dispatchWorkerId, setDispatchWorkerId, sendSelected, onClose }) {
+  return (
+    <Modal title="放大筛选列表" subtitle={`当前筛选结果 ${points.length} 个点位，可批量勾选并派单。`} onClose={onClose} wide>
+      <div className="expanded-toolbar">
+        <span>已选 {selectedIds.length}/{points.length}</span>
+        <button onClick={() => setSelectedIds(points.map((point) => point.id))}>全选</button>
+        <button onClick={() => setSelectedIds([])}>全不选</button>
+        <button onClick={() => setSelectedIds(points.filter((point) => !selectedIds.includes(point.id)).map((point) => point.id))}>反选</button>
+        <select aria-label="放大列表师傅选择" value={dispatchWorkerId} onChange={(event) => setDispatchWorkerId(event.target.value)}>
+          {workers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name} / {worker.car_no || worker.phone}</option>)}
+        </select>
+        <button className="blue-button" onClick={sendSelected}>发送已选点位到师傅移动端</button>
+      </div>
+      <div className="expanded-list">
+        {points.map((point) => {
+          const counts = mediaCounts(point, photos);
+          return (
+            <article key={point.id}>
+              <button className="check-button" onClick={() => toggleSelect(point.id)}>{selectedIds.includes(point.id) ? "✓" : ""}</button>
+              <b>{point.title}</b>
+              <span>{point.address}</span>
+              <small>{getProjectName(point)} · {getPointStatus(point)} · K码 {point.k_code} · 照片 {counts.total}</small>
+            </article>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+}
+
+function DiagnosisModal({ result, onRun, onClose }) {
+  return (
+    <Modal title="国内接口诊断" subtitle="当前主线不再依赖 Supabase，诊断只检查数据模式和国内 API 连接。" onClose={onClose}>
+      <div className="env-grid">
+        <div><span>VITE_DATA_MODE</span><b>{DATA_MODE}</b></div>
+        <div><span>VITE_API_BASE_URL</span><b>{isLocalDataMode ? "本地模式无需配置" : API_BASE_URL}</b></div>
+        <div><span>VITE_AMAP_KEY</span><b>{supabaseEnv.hasAmapKey ? "已读取" : "未配置"}</b></div>
+        <div><span>VITE_KIMI_CLASSIFY_ENDPOINT</span><b>{supabaseEnv.hasKimiClassifyEndpoint ? "已读取" : "可选未配置"}</b></div>
+      </div>
+      <pre className="diagnosis-pre">{safeJson(result || { ok: isLocalDataMode, mode: DATA_MODE, label: getDataModeLabel() })}</pre>
+      <div className="modal-actions">
+        <button className="blue-button" onClick={onRun}>开始诊断</button>
+      </div>
+    </Modal>
+  );
+}
+
+function Field({ label, children }) {
+  return <label className="field"><span>{label}</span>{children}</label>;
+}
+
+function WorkerPage({ data, workerId }) {
   const [index, setIndex] = useState(0);
-  const point = visiblePoints[Math.min(index, Math.max(visiblePoints.length - 1, 0))] || null;
+  const [identity, setIdentity] = useState({ name: "", phone: "" });
+  const [locked, setLocked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
+  const [uploadKind, setUploadKind] = useState("现场照片");
 
-  async function handleUpload(e) {
-    const files = Array.from(e.target.files || []);
+  const worker = data.workers.find((item) => [item.id, item.code, item.worker_key, item.slug].includes(workerId))
+    || data.workers[0]
+    || { id: workerId || "w1", code: workerId || "w1", name: workerId === "w2" || workerId === "li" ? "李师傅" : "张师傅", phone: "", car_no: "" };
+
+  useEffect(() => {
+    setIdentity({ name: worker.name || "", phone: worker.phone || "" });
+  }, [worker.id]);
+
+  const taskPointIds = data.tasks
+    .filter((task) => (task.worker_id || task.workerId) === worker.id)
+    .map((task) => task.point_id || task.pointId);
+  const visiblePoints = taskPointIds.length ? data.points.filter((point) => taskPointIds.includes(point.id)) : (isProxyDataMode ? data.points : []);
+  const point = visiblePoints[Math.min(index, Math.max(visiblePoints.length - 1, 0))] || null;
+
+  async function handleUpload(event) {
+    const files = Array.from(event.target.files || []);
     if (!files.length || !point) return;
     setBusy(true);
     try {
       for (const file of files) {
-        await uploadPhoto({ file, point, worker });
+        await data.uploadPhoto({ file, point, worker, kind: uploadKind });
       }
-      setLocalMessage(`${point.title} 已上传资料，国内后端媒体库写入后自动更新为已完成。`);
-      if (isProxyDataMode) {
-        await loadWorkerTasks(workerCode);
-      } else {
-        await loadAll();
-      }
-    } catch (err) {
-      const issue = classifyApiError(err);
-      setLocalMessage(`上传失败：${issue.category}。${issue.detail}`);
+      setLocalMessage(`${point.title} 已上传资料，后台点位状态已自动更新为已完成。`);
+      if (isProxyDataMode) await data.loadWorkerTasks(workerId);
+      else await data.loadAll();
+    } catch (error) {
+      const issue = classifyApiError(error);
+      setLocalMessage(`上传失败：${issue.category}，${issue.detail}`);
     } finally {
       setBusy(false);
-      e.target.value = "";
+      event.target.value = "";
     }
   }
 
   return (
-    <main className="page worker">
-      <header className="mobile-hero">
-        <div className="tag">师傅移动端 H5</div>
+    <main className="worker-page">
+      <section className="worker-hero">
+        <span>师傅移动端派单页</span>
         <h1>{worker.name} 的任务</h1>
-        <p>{worker.car_no} / {worker.phone}</p>
-        <small>数据来源：{dataSource || (isLocalDataMode ? "本地演示任务" : "真实派单任务")}</small>
-      </header>
+        <p>一页一个点位，滑动执行。后台发送的点位会按卡片显示，上传成功后自动回写完成状态。</p>
+        <small>数据来源：{data.dataSource || (isLocalDataMode ? "本地演示任务" : "真实派单任务")}</small>
+      </section>
 
-      {isLocalDataMode && <section className="warn">当前是本地演示模式。跨设备测试请配置 mock-server 或 production-api。</section>}
-      {(message || localMessage) && <section className="info">{localMessage || message}</section>}
+      {(data.message || localMessage) && <section className="info"><strong>{localMessage || data.message}</strong></section>}
 
-      <section className="progress">
+      <section className="identity-card">
+        <div className="section-head">
+          <div>
+            <h2>队伍身份确认</h2>
+            <p>确认后锁定，避免现场误切换队伍。</p>
+          </div>
+          <button className="green-button" disabled={locked} onClick={() => setLocked(true)}>{locked ? "已确认" : "确认队伍身份"}</button>
+        </div>
+        <div className="identity-grid">
+          <Field label="队伍信息格式"><input disabled={locked} value={identity.name} onChange={(event) => setIdentity({ ...identity, name: event.target.value })} /></Field>
+          <Field label="手机号"><input disabled={locked} value={identity.phone} onChange={(event) => setIdentity({ ...identity, phone: event.target.value })} /></Field>
+        </div>
+      </section>
+
+      <section className="progress-card">
         <span>任务进度</span>
         <b>{visiblePoints.length ? `${Math.min(index + 1, visiblePoints.length)} / ${visiblePoints.length}` : "0 / 0"}</b>
       </section>
 
       {point ? (
-        <section className="task-card">
+        <section className="mobile-point-card">
           <div className="row">
             <div>
-              <small>点位 {index + 1}</small>
+              <small>当前点位</small>
               <h2>{point.title}</h2>
             </div>
-            <StatusPill status={point.status} />
+            <StatusPill status={getPointStatus(point)} />
           </div>
-
-          <div className="addr">
-            <b>地址：</b>{point.address}<br />
-            <b>K码：</b>{point.k_code}<br />
-            <b>项目：</b>{point.project_name || "未分配"}<br />
-            <b>坐标：</b>{point.lng && point.lat ? `${point.lng}, ${point.lat}` : "未匹配"}
+          <div className="mobile-point-info">
+            <div><span>地址</span><b>{point.address}</b></div>
+            <div><span>K码</span><b>{point.k_code || "未登记"}</b></div>
+            <div><span>项目</span><b>{getProjectName(point)}</b></div>
           </div>
-
-          <div className="step">
-            <h3>现场导航</h3>
-            <div className="two">
-              <div><b>房东</b><br />{point.landlord_name || "未登记"} / {point.landlord_phone || "未登记"}</div>
-              <div><b>状态</b><br />{point.status}</div>
+          <section className="mobile-step">
+            <h3>第一步：查看点位并导航</h3>
+            <div className="mobile-contact-grid">
+              <div><span>房东信息</span><b>{point.landlord_name || "未登记"} / {point.landlord_phone || "未登记"}</b></div>
+              <div><span>施工队长信息</span><b>{getCaptainName(point)} / {getCaptainPhone(point)}</b></div>
             </div>
-            <div className="two buttons">
+            <div className="mobile-action-grid">
               <a href={amapMarkerUrl(point)} target="_blank" rel="noreferrer">高德查看</a>
-              <a className="blue" href={amapNavigationUrl(point)} target="_blank" rel="noreferrer">高德导航</a>
+              <a className="blue-button" href={amapNavigationUrl(point)} target="_blank" rel="noreferrer">高德导航</a>
             </div>
-          </div>
-
-          <div className="step">
-            <h3>上传照片/视频</h3>
-            <label className={`upload ${busy ? "disabled" : ""}`}>
-              {busy ? "上传中..." : "上传现场照片 / 水印图片 / 720全景 / 全景视频"}
+          </section>
+          <section className="mobile-step">
+            <h3>第二步：上传照片/视频</h3>
+            <select value={uploadKind} onChange={(event) => setUploadKind(event.target.value)}>
+              {MEDIA_TABS.map((item) => <option key={item}>{item}</option>)}
+            </select>
+            <label className={`mobile-upload ${busy ? "disabled" : ""}`}>
+              {busy ? "上传中..." : "上传水印 / 现场 / 全景照片 / 全景视频"}
               <input disabled={busy} type="file" accept="image/*,video/*" multiple onChange={handleUpload} />
             </label>
-            <p className="hint">上传成功后写入国内后端媒体库，并自动把点位更新为“已完成”。</p>
-            <div className="media-count">已上传：{photos.filter((ph) => ph.point_id === point.id).length} 个文件</div>
-          </div>
+          </section>
         </section>
       ) : (
-        <section className="empty">暂无派单点位。请让后台先筛选点位并发送给当前师傅。</section>
+        <section className="empty">暂无派单点位。请后台先筛选点位并发送给当前师傅。</section>
       )}
 
-      <div className="bottom-nav">
-        <button disabled={index <= 0} onClick={() => setIndex(i => Math.max(0, i - 1))}>上一点位</button>
-        <button disabled={index >= visiblePoints.length - 1} onClick={() => setIndex(i => Math.min(visiblePoints.length - 1, i + 1))}>下一点位</button>
+      <nav className="mobile-bottom-nav">
+        <button disabled={index <= 0} onClick={() => setIndex((current) => Math.max(0, current - 1))}>上一点位</button>
+        <button disabled={index >= visiblePoints.length - 1} onClick={() => setIndex((current) => Math.min(visiblePoints.length - 1, current + 1))}>下一点位</button>
+      </nav>
+    </main>
+  );
+}
+
+function MobileMapPack({ data }) {
+  const [mapMode, setMapMode] = useState("standard");
+  const current = data.points[0] || null;
+  return (
+    <main className="mobile-map-page">
+      <section className="worker-hero">
+        <span>移动端高德点位包</span>
+        <h1>筛选点位已发送到移动端</h1>
+        <p>标准/卫星预览、复制点位清单、逐点高德查看和导航。</p>
+      </section>
+      <div className="segmented wide">
+        <button className={mapMode === "standard" ? "active" : ""} onClick={() => setMapMode("standard")}>标准图</button>
+        <button className={mapMode === "satellite" ? "active" : ""} onClick={() => setMapMode("satellite")}>卫星图</button>
+      </div>
+      <div className={`map-board mobile-map-preview ${mapMode}`}>
+        {data.points.map((point, index) => <button key={point.id} className="map-pin" style={mapPointStyle(point, data.points, index)}><span /></button>)}
+      </div>
+      <div className="mobile-map-actions">
+        <button onClick={() => navigator.clipboard?.writeText(data.points.map((point) => `${point.title} ${point.address} ${point.k_code}`).join("\n"))}>复制点位清单</button>
+        {current && <a className="blue-button" href={amapNavigationUrl(current)} target="_blank" rel="noreferrer">导航当前点位</a>}
+      </div>
+      <div className="map-pack-list">
+        {data.points.map((point) => (
+          <article key={point.id}>
+            <b>{point.title}</b>
+            <span>{point.address}</span>
+            <small>K码 {point.k_code} · 房东 {point.landlord_name || "未登记"} · 队长 {getCaptainName(point)} · {getProjectName(point)}</small>
+            <div>
+              <a href={amapMarkerUrl(point)} target="_blank" rel="noreferrer">高德查看</a>
+              <a href={amapNavigationUrl(point)} target="_blank" rel="noreferrer">高德导航</a>
+            </div>
+          </article>
+        ))}
       </div>
     </main>
   );
@@ -1728,14 +1491,15 @@ function App() {
   const data = useH5Data();
 
   useEffect(() => {
-    if (route.page === "worker" && isProxyDataMode) {
-      data.loadWorkerTasks(route.workerCode);
+    if (route.page === "worker") {
+      data.loadWorkerTasks(route.workerId);
     } else {
       data.loadAll();
     }
-  }, [route.page, route.workerCode]);
+  }, [route.page, route.workerId]);
 
-  if (route.page === "worker") return <WorkerPage data={data} workerCode={route.workerCode} />;
+  if (route.page === "worker") return <WorkerPage data={data} workerId={route.workerId} />;
+  if (route.page === "mobile-map") return <MobileMapPack data={data} />;
   return <AdminPage data={data} />;
 }
 

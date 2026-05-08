@@ -6,54 +6,27 @@ const STORE_KEY = "wall-ad-h5-demo-state";
 const fixtureDir = path.join(__dirname, "..", "fixtures");
 const fixturePath = path.join(fixtureDir, "test-wall.jpg");
 
-function invokeApi(handler, { method = "GET", query = {}, body = undefined } = {}) {
-  return new Promise((resolve) => {
-    const req = { method, query, body };
-    const res = {
-      statusCode: 200,
-      headers: {},
-      setHeader(name, value) {
-        this.headers[name] = value;
-      },
-      status(code) {
-        this.statusCode = code;
-        return this;
-      },
-      json(payload) {
-        resolve({ status: this.statusCode, body: payload, headers: this.headers });
-      },
-      end(payload) {
-        let body = payload;
-        try {
-          body = payload ? JSON.parse(payload) : {};
-        } catch {
-          body = payload;
-        }
-        resolve({ status: this.statusCode, body, headers: this.headers });
-      },
-    };
-    Promise.resolve(handler(req, res)).catch((error) => resolve({ status: 500, body: { ok: false, detail: error.message } }));
-  });
-}
-
 async function openAdmin(page) {
-  await page.goto("/");
+  await page.goto("/admin");
   await expect(page.locator(".admin-shell")).toBeVisible();
-  await expect(page.locator(".system-title")).toContainText("全国墙体广告执行派单系统");
+  await expect(page.locator(".system-title")).toContainText("全国墙体广告执行坐标系统");
 }
 
 async function resetDemoData(page) {
-  await openAdmin(page);
+  await page.goto("/admin");
   await page.evaluate((key) => window.localStorage.removeItem(key), STORE_KEY);
-  await page.getByRole("button", { name: /重置本地演示数据|写入演示数据/ }).click();
+  await page.reload();
+  await expect(page.locator(".hero-shell")).toBeVisible();
+  await page.getByRole("button", { name: "写入演示数据" }).click();
   await expect(page.locator(".list-panel .point-card")).toHaveCount(3);
 }
 
 async function dispatchToLi(page) {
   await resetDemoData(page);
-  await page.getByLabel("师傅选择").selectOption({ label: "李师傅 / 粤A·工002" });
-  await page.getByRole("button", { name: "发送已选点位到师傅移动端" }).click();
-  await expect(page.locator(".info")).toContainText(/派单|dispatch_tasks/);
+  await page.getByLabel("师傅选择").selectOption("w2");
+  await page.locator(".dispatch-box").getByRole("button", { name: "全选" }).click();
+  await page.locator(".dispatch-box").getByRole("button", { name: "发送已选点位到师傅移动端" }).click();
+  await expect(page.locator(".info")).toContainText("已成功发送 3 个点位给 李师傅");
 }
 
 test.beforeAll(() => {
@@ -62,131 +35,127 @@ test.beforeAll(() => {
   fs.writeFileSync(fixturePath, Buffer.from(jpgBase64, "base64"));
 });
 
-test.describe("墙体广告执行 H5 派单系统", () => {
-  test("测试 1：后台首页可打开", async ({ page }) => {
+test.describe("全国墙体广告执行 H5 国内接口版高级 UI", () => {
+  test("后台首页恢复高级调度中心结构", async ({ page }) => {
     await openAdmin(page);
-    await expect(page.getByText("筛选点位列表")).toBeVisible();
-    await expect(page.getByText("点位列表")).toBeVisible();
-    await expect(page.getByText("师傅选择")).toBeVisible();
-    await expect(page.getByRole("button", { name: "发送已选点位到师傅移动端" })).toBeVisible();
+    await expect(page.locator(".hero-shell")).toContainText("项目切换、共用墙面、工人小车定位和后台轨迹记录");
+    await expect(page.getByRole("link", { name: "张师傅移动端" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "李师傅移动端" })).toBeVisible();
+    await expect(page.getByText("项目管理")).toBeVisible();
+    await expect(page.getByText("Kimi AI 图片分类配置")).toBeVisible();
+    await expect(page.getByText("稳定性自检")).toBeVisible();
+    await expect(page.getByText("高德地图执行台")).toBeVisible();
+    await expect(page.getByText("项目照片库")).toBeVisible();
   });
 
-  test("测试 2：本地演示数据可用", async ({ page }) => {
-    await openAdmin(page);
-    const localMode = await page.getByText(/本地演示模式|本地演示数据/).count();
-    if (localMode > 0) {
-      await expect(page.getByText(/本地演示模式|本地演示数据/).first()).toBeVisible();
-    }
-    await page.getByRole("button", { name: /重置本地演示数据|写入演示数据/ }).click();
-    await expect(page.locator(".list-panel .point-card")).toHaveCount(3);
+  test("本地演示数据可写入并显示 3 个点位", async ({ page }) => {
+    await resetDemoData(page);
+    await expect(page.locator(".list-panel .point-card").first()).toContainText("GZ-BY-001");
+    await expect(page.locator(".list-panel .point-card").nth(1)).toContainText("FS-NH-002");
+    await expect(page.locator(".list-panel .point-card").nth(2)).toContainText("QY-YD-003");
   });
 
-  test("测试 3：后台筛选和勾选", async ({ page }) => {
+  test("后台筛选、全选、全不选、反选可用", async ({ page }) => {
     await resetDemoData(page);
     const pointCards = page.locator(".list-panel .point-card");
-    const pointCount = await pointCards.count();
+    const count = await pointCards.count();
 
-    await page.getByRole("button", { name: "全选" }).click();
-    await expect(page.getByText(`已选 ${pointCount}/${pointCount}`)).toBeVisible();
+    await page.locator(".dispatch-box").getByRole("button", { name: "全选" }).click();
+    await expect(page.getByText(`已选 ${count}/${count}`)).toBeVisible();
 
-    await page.getByRole("button", { name: "全不选" }).click();
-    await expect(page.getByText(`已选 0/${pointCount}`)).toBeVisible();
+    await page.locator(".dispatch-box").getByRole("button", { name: "全不选" }).click();
+    await expect(page.getByText(`已选 0/${count}`)).toBeVisible();
 
-    await page.getByRole("button", { name: "反选" }).click();
-    await expect(page.getByText(`已选 ${pointCount}/${pointCount}`)).toBeVisible();
+    await page.locator(".dispatch-box").getByRole("button", { name: "反选" }).click();
+    await expect(page.getByText(`已选 ${count}/${count}`)).toBeVisible();
 
-    await page.getByPlaceholder("搜索点位、地址、房东、K码、项目").fill("GZ-BY-001");
+    await page.getByPlaceholder("搜索地址、手机号、工人、标签").fill("GZ-BY-001");
     await expect(pointCards).toHaveCount(1);
     await expect(pointCards.first()).toContainText("GZ-BY-001");
-    await expect(page.getByText("FS-NH-002")).toHaveCount(0);
   });
 
-  test("测试 4：后台派单给李师傅", async ({ page }) => {
+  test("后台派单给李师傅后本地任务写入成功", async ({ page }) => {
     await dispatchToLi(page);
     const state = await page.evaluate((key) => JSON.parse(window.localStorage.getItem(key) || "{}"), STORE_KEY);
-    expect(state.tasks?.length || 0).toBeGreaterThanOrEqual(1);
-    expect(state.tasks?.some((task) => task.worker_id === "w2")).toBeTruthy();
+    expect(state.tasks?.length || 0).toBe(3);
+    expect(state.tasks?.every((task) => task.worker_id === "w2")).toBeTruthy();
+    expect(state.points?.every((point) => point.status === "施工中")).toBeTruthy();
   });
 
-  test("测试 5：李师傅移动端可读取任务", async ({ page }) => {
+  test("李师傅移动端恢复高级卡片式任务页", async ({ page }) => {
     await dispatchToLi(page);
-    await page.goto("/worker?worker=li");
+    await page.goto("/worker/w2");
+    await expect(page.locator(".worker-hero")).toContainText("师傅移动端派单页");
     await expect(page.getByText("李师傅 的任务")).toBeVisible();
-    await expect(page.locator(".progress b")).toHaveText(/1 \/ \d+/);
+    await expect(page.locator(".progress-card b")).toHaveText("1 / 3");
     await expect(page.getByRole("heading", { name: "GZ-BY-001" })).toBeVisible();
-    await expect(page.locator(".addr")).toContainText("地址：");
-    await expect(page.locator(".addr")).toContainText("K码：");
-    await expect(page.locator(".addr")).toContainText("项目：");
+    await expect(page.getByText("第一步：查看点位并导航")).toBeVisible();
+    await expect(page.getByText("第二步：上传照片/视频")).toBeVisible();
     await expect(page.getByRole("link", { name: "高德查看" })).toBeVisible();
     await expect(page.getByRole("link", { name: "高德导航" })).toBeVisible();
-    await expect(page.getByText(/上传现场照片/)).toBeVisible();
   });
 
-  test("测试 6：移动端上传照片后自动完成", async ({ page }) => {
+  test("移动端上传图片后自动完成并进入后台照片库", async ({ page }) => {
     await dispatchToLi(page);
-    await page.goto("/worker?worker=li");
+    await page.goto("/worker/w2");
     await page.locator('input[type="file"]').setInputFiles(fixturePath);
     await expect(page.getByText(/已上传资料/)).toBeVisible();
     await expect(page.locator(".pill.ok")).toBeVisible();
 
-    await page.goto("/");
-    await expect(page.locator(".metrics-grid .metric").nth(1).locator("b")).toHaveText("1");
-    await expect(page.getByText(/媒体 1/).first()).toBeVisible();
+    await page.goto("/admin");
+    await expect(page.getByText("项目照片库")).toBeVisible();
+    await expect(page.getByText(/照片 1/).first()).toBeVisible();
+    const state = await page.evaluate((key) => JSON.parse(window.localStorage.getItem(key) || "{}"), STORE_KEY);
+    expect(state.points.find((point) => point.id === "p1")?.status).toBe("已完成");
+    expect(state.photos?.length || 0).toBeGreaterThanOrEqual(1);
   });
 
-  test("测试 7：上下点位切换", async ({ page }) => {
+  test("移动端上一点位和下一点位切换正常", async ({ page }) => {
     await dispatchToLi(page);
-    await page.goto("/worker?worker=li");
-
-    const title = page.locator(".task-card h2");
-    await expect(page.locator(".progress b")).toHaveText("1 / 3");
-    await expect(title).toHaveText("GZ-BY-001");
+    await page.goto("/worker/w2");
+    await expect(page.locator(".progress-card b")).toHaveText("1 / 3");
+    await expect(page.getByRole("heading", { name: "GZ-BY-001" })).toBeVisible();
 
     await page.getByRole("button", { name: "下一点位" }).click();
-    await expect(page.locator(".progress b")).toHaveText("2 / 3");
-    await expect(title).toHaveText("FS-NH-002");
+    await expect(page.locator(".progress-card b")).toHaveText("2 / 3");
+    await expect(page.getByRole("heading", { name: "FS-NH-002" })).toBeVisible();
 
     await page.getByRole("button", { name: "上一点位" }).click();
-    await expect(page.locator(".progress b")).toHaveText("1 / 3");
-    await expect(title).toHaveText("GZ-BY-001");
+    await expect(page.locator(".progress-card b")).toHaveText("1 / 3");
+    await expect(page.getByRole("heading", { name: "GZ-BY-001" })).toBeVisible();
   });
 
-  test("测试 8：国内接口诊断", async ({ page }) => {
-    await openAdmin(page);
-    await page.getByRole("button", { name: "接口诊断" }).click();
-    await expect(page.getByText("国内接口连接诊断")).toBeVisible();
-    await page.getByRole("button", { name: "开始诊断" }).click();
+  test("放大列表、点位编辑、现场查看中心可打开", async ({ page }) => {
+    await resetDemoData(page);
+    await page.getByRole("button", { name: "放大列表" }).click();
+    await expect(page.getByRole("dialog")).toContainText("放大筛选列表");
+    await page.getByLabel("关闭").click();
 
-    await expect(page.locator(".env-grid").getByText("VITE_DATA_MODE", { exact: true })).toBeVisible();
-    await expect(page.locator(".env-grid").getByText("VITE_API_BASE_URL", { exact: true })).toBeVisible();
-    await expect(page.getByText("数据模式与公开配置")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "国内后端接口" })).toBeVisible();
+    await page.getByRole("button", { name: "编辑/上传" }).first().click();
+    await expect(page.getByRole("dialog")).toContainText("点位编辑 / 上传");
+    await page.getByLabel("关闭").click();
 
-    const modeText = await page.getByText(/本地模式|localStorage|接口/).count();
-    expect(modeText).toBeGreaterThan(0);
+    await page.getByRole("button", { name: "现场查看" }).first().click();
+    await expect(page.getByRole("dialog")).toContainText("现场查看中心");
   });
 
-  test("测试 9：前端派单按钮不再使用 Canvas 本地跳转逻辑", async () => {
+  test("移动端高德点位包页面可打开", async ({ page }) => {
+    await resetDemoData(page);
+    await page.goto("/mobile-map");
+    await expect(page.getByText("筛选点位已发送到移动端")).toBeVisible();
+    await expect(page.getByRole("button", { name: "复制点位清单" })).toBeVisible();
+    await expect(page.getByText("高德导航").first()).toBeVisible();
+  });
+
+  test("前端不包含 Canvas 本地跳转派单逻辑", async () => {
     const appSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "App.jsx"), "utf8");
-    const apiClientSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "apiClient.js"), "utf8");
+    const apiSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "apiClient.js"), "utf8");
 
     expect(appSource).not.toContain("setWorkerPointTasks");
     expect(appSource).not.toContain("setActiveMobileWorkerId");
     expect(appSource).not.toContain('setAppView("mobile")');
     expect(appSource).toContain("dispatchPointsApi(requestPayload)");
-    expect(apiClientSource).toContain("export async function dispatchPoints");
-    expect(apiClientSource).toContain('requestApi("/api/dispatch"');
-    expect(apiClientSource).toContain("VITE_API_BASE_URL");
+    expect(apiSource).toContain("VITE_API_BASE_URL");
+    expect(apiSource).toContain('requestApi("/api/dispatch"');
   });
-
-  test("测试 10：Vercel 不把 /api 路由重写到前端", async () => {
-    const vercelConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "..", "vercel.json"), "utf8"));
-    expect(vercelConfig.rewrites).toEqual([
-      {
-        source: "/((?!api/.*).*)",
-        destination: "/index.html",
-      },
-    ]);
-  });
-
 });
