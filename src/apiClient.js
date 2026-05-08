@@ -4,9 +4,26 @@ const LOCAL_STORE_KEY = "wall-ad-h5-demo-state";
 const LOCAL_STORE_EVENT = "wall-ad-h5-demo-updated";
 const LOCAL_SCHEMA_VERSION = 3;
 
-const rawMode = supabaseEnv.forceLocalDemo ? "local" : String(import.meta.env.VITE_DATA_MODE || "local").toLowerCase();
-export const DATA_MODE = ["local", "mock-server", "production-api"].includes(rawMode) ? rawMode : "local";
-export const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || "http://localhost:8787").replace(/\/$/, "");
+function getBrowserHostname() {
+  if (typeof window === "undefined") return "localhost";
+  return window.location.hostname || "localhost";
+}
+
+function inferDefaultMode() {
+  const host = getBrowserHostname();
+  const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  return isLocalHost ? "local" : "mock-server";
+}
+
+function inferApiBaseUrl() {
+  const configured = String(import.meta.env.VITE_API_BASE_URL || "").trim();
+  if (configured) return configured.replace(/\/$/, "");
+  return `http://${getBrowserHostname()}:8787`;
+}
+
+const rawMode = supabaseEnv.forceLocalDemo ? "local" : String(import.meta.env.VITE_DATA_MODE || inferDefaultMode()).toLowerCase();
+export const DATA_MODE = ["local", "mock-server", "production-api"].includes(rawMode) ? rawMode : inferDefaultMode();
+export const API_BASE_URL = inferApiBaseUrl();
 
 export const isLocalDataMode = DATA_MODE === "local";
 export const isMockServerMode = DATA_MODE === "mock-server";
@@ -300,7 +317,11 @@ export async function saveWorker(worker) {
 
 export async function getWallPoints() {
   if (isLocalDataMode) return readLocalState().points;
-  return requestApi("/api/wall-points");
+  return requestApi("/api/points");
+}
+
+export async function getPoints() {
+  return getWallPoints();
 }
 
 export async function saveWallPoint(point) {
@@ -377,7 +398,7 @@ export async function getWorkerTasks(workerId) {
     const pointIds = tasks.map((task) => task.point_id || task.pointId);
     return { worker, tasks, points: state.points.filter((point) => pointIds.includes(point.id)), photos: state.photos, trackLogs: state.trackLogs };
   }
-  return requestApi(`/api/worker-tasks/${encodeURIComponent(workerId)}`);
+  return requestApi(`/api/worker-tasks?workerId=${encodeURIComponent(workerId)}`);
 }
 
 export async function uploadPointMedia(pointId, files, meta = {}) {
@@ -416,7 +437,7 @@ export async function completePoint(pointId, payload = {}) {
     });
     return { id: pointId, status: "已完成" };
   }
-  return requestApi(`/api/complete-point/${encodeURIComponent(pointId)}`, { method: "POST", body: JSON.stringify(payload) });
+  return requestApi("/api/complete-point", { method: "POST", body: JSON.stringify({ ...payload, pointId, point_id: pointId }) });
 }
 
 export async function getTrackLogs() {

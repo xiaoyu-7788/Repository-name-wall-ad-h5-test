@@ -215,8 +215,8 @@ function useH5Data() {
       setMessage(`已读取 ${state.points?.length || 0} 个派单点位。`);
     } catch (error) {
       const issue = classifyApiError(error);
-      setMessage(`读取师傅任务失败：${issue.category}，${issue.detail}`);
-      await loadAll();
+      setMessage(`无法连接派单服务器，请确认电脑端 Mock Server 8787 正在运行，手机和电脑在同一 WiFi。${issue.category}：${issue.detail}`);
+      if (isLocalDataMode) await loadAll();
     } finally {
       setLoading(false);
     }
@@ -1493,9 +1493,14 @@ function App() {
   useEffect(() => {
     if (route.page === "worker") {
       data.loadWorkerTasks(route.workerId);
+      const timer = window.setInterval(() => {
+        data.loadWorkerTasks(route.workerId);
+      }, 3000);
+      return () => window.clearInterval(timer);
     } else {
       data.loadAll();
     }
+    return undefined;
   }, [route.page, route.workerId]);
 
   if (route.page === "worker") return <WorkerPage data={data} workerId={route.workerId} />;

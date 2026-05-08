@@ -109,6 +109,30 @@ function matchWorker(worker, query) {
     || (value === "zhang" && (String(worker.name || "").includes("张") || String(worker.car_no || "").includes("工001")));
 }
 
+function buildWorkerTasksPayload(db, workerQuery) {
+  const worker = db.workers.find((item) => matchWorker(item, workerQuery)) || { id: workerQuery, name: workerQuery };
+  const dispatchTasks = db.dispatchTasks.filter((task) => workerIdOf(task) === worker.id);
+  const pointIds = dispatchTasks.map((task) => String(pointIdOf(task)));
+  const points = db.wallPoints.filter((point) => pointIds.includes(String(point.id)));
+  const taskPoints = dispatchTasks.map((task) => ({
+    ...points.find((point) => String(point.id) === String(pointIdOf(task))),
+    ...task,
+    point_id: pointIdOf(task),
+    worker_id: workerIdOf(task),
+  }));
+  return {
+    worker,
+    workerId: worker.id,
+    count: points.length,
+    tasks: dispatchTasks,
+    dispatchTasks,
+    taskPoints,
+    points,
+    photos: db.pointMedia,
+    pointMedia: db.pointMedia,
+  };
+}
+
 function createApp() {
   ensureDirs();
   const app = express();
@@ -155,6 +179,7 @@ function createApp() {
   });
 
   app.get("/api/wall-points", (req, res) => ok(res, readDb().wallPoints));
+  app.get("/api/points", (req, res) => ok(res, readDb().wallPoints));
   app.post("/api/wall-points", (req, res) => {
     const db = readDb();
     db.wallPoints = upsert(db.wallPoints, { id: req.body.id || uid("point"), status: "待施工", created_at: nowIso(), ...req.body });
@@ -196,20 +221,21 @@ function createApp() {
       created_at: nowIso(),
     }));
     db.dispatchTasks = [...tasks, ...db.dispatchTasks.filter((task) => !taskKeys.has(`${workerIdOf(task)}:${pointIdOf(task)}`))];
-    db.wallPoints = db.wallPoints.map((point) => uniquePointIds.includes(point.id) && point.status !== "已完成"
+    db.wallPoints = db.wallPoints.map((point) => uniquePointIds.includes(String(point.id)) && point.status !== "已完成"
       ? { ...point, status: "施工中", updated_at: nowIso() }
       : point);
     writeDb(db);
-    ok(res, { workerId, inserted: tasks.length, pointIds: uniquePointIds });
+    ok(res, { workerId, count: tasks.length, inserted: tasks.length, tasks, pointIds: uniquePointIds });
+  });
+
+  app.get("/api/worker-tasks", (req, res) => {
+    const workerId = req.query.workerId || req.query.worker || req.query.worker_id;
+    if (!workerId) return fail(res, 400, "缺少 workerId");
+    ok(res, buildWorkerTasksPayload(readDb(), workerId));
   });
 
   app.get("/api/worker-tasks/:workerId", (req, res) => {
-    const db = readDb();
-    const worker = db.workers.find((item) => matchWorker(item, req.params.workerId)) || { id: req.params.workerId, name: req.params.workerId };
-    const tasks = db.dispatchTasks.filter((task) => workerIdOf(task) === worker.id);
-    const pointIds = tasks.map(pointIdOf);
-    const points = db.wallPoints.filter((point) => pointIds.includes(point.id));
-    ok(res, { worker, tasks, points, photos: db.pointMedia, pointMedia: db.pointMedia });
+    ok(res, buildWorkerTasksPayload(readDb(), req.params.workerId));
   });
 
   app.get("/api/point-media", (req, res) => ok(res, readDb().pointMedia));
@@ -255,6 +281,30 @@ function createApp() {
       : task);
     writeDb(db);
     ok(res, { id: req.params.pointId, status: "已完成", completedAt });
+  });
+
+  app.post("/api/complete-point", (req, res) => {
+    const pointId = req.body.pointId || req.body.point_id;
+    if (!pointId) return fail(res, 400, "缺少 pointId");
+    const db = readDb();
+    const completedAt = nowIso();
+    db.wallPoints = db.wallPoints.map((point) => String(point.id) === String(pointId)
+      ? { ...point, status: "已完成", photos: req.body.photos || point.photos || [], videos: req.body.videos || point.videos || [], completed_at: completedAt, updated_at: completedAt }
+      : point);
+    db.dispatchTasks = db.dispatchTasks.map((task) => String(pointIdOf(task)) === String(pointId)
+      ? { ...task, status: "已完成", completed_at: completedAt }
+      : task);
+    writeDb(db);
+    ok(res, db.wallPoints.find((point) => String(point.id) === String(pointId)) || { id: pointId, status: "已完成" });
+  });
+
+  app.get("/api/debug-state", (req, res) => {
+    const db = readDb();
+    ok(res, {
+      points: db.wallPoints,
+      workers: db.workers,
+      dispatchTasks: db.dispatchTasks,
+    });
   });
 
   app.get("/api/track-logs", (req, res) => ok(res, readDb().trackLogs));
