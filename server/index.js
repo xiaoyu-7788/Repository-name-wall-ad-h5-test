@@ -114,12 +114,17 @@ function buildWorkerTasksPayload(db, workerQuery) {
   const dispatchTasks = db.dispatchTasks.filter((task) => workerIdOf(task) === worker.id);
   const pointIds = dispatchTasks.map((task) => String(pointIdOf(task)));
   const points = db.wallPoints.filter((point) => pointIds.includes(String(point.id)));
-  const taskPoints = dispatchTasks.map((task) => ({
-    ...points.find((point) => String(point.id) === String(pointIdOf(task))),
-    ...task,
-    point_id: pointIdOf(task),
-    worker_id: workerIdOf(task),
-  }));
+  const taskPoints = dispatchTasks.map((task) => {
+    const point = points.find((item) => String(item.id) === String(pointIdOf(task))) || {};
+    return {
+      ...task,
+      ...point,
+      task_id: task.id,
+      point_id: pointIdOf(task),
+      worker_id: workerIdOf(task),
+      dispatch_status: task.status,
+    };
+  });
   return {
     worker,
     workerId: worker.id,
@@ -225,17 +230,20 @@ function createApp() {
       ? { ...point, status: "施工中", updated_at: nowIso() }
       : point);
     writeDb(db);
-    ok(res, { workerId, count: tasks.length, inserted: tasks.length, tasks, pointIds: uniquePointIds });
+    const payload = { workerId, count: tasks.length, inserted: tasks.length, tasks, pointIds: uniquePointIds };
+    ok(res, payload, payload);
   });
 
   app.get("/api/worker-tasks", (req, res) => {
     const workerId = req.query.workerId || req.query.worker || req.query.worker_id;
     if (!workerId) return fail(res, 400, "缺少 workerId");
-    ok(res, buildWorkerTasksPayload(readDb(), workerId));
+    const payload = buildWorkerTasksPayload(readDb(), workerId);
+    ok(res, payload, payload);
   });
 
   app.get("/api/worker-tasks/:workerId", (req, res) => {
-    ok(res, buildWorkerTasksPayload(readDb(), req.params.workerId));
+    const payload = buildWorkerTasksPayload(readDb(), req.params.workerId);
+    ok(res, payload, payload);
   });
 
   app.get("/api/point-media", (req, res) => ok(res, readDb().pointMedia));
@@ -300,11 +308,12 @@ function createApp() {
 
   app.get("/api/debug-state", (req, res) => {
     const db = readDb();
-    ok(res, {
+    const payload = {
       points: db.wallPoints,
       workers: db.workers,
       dispatchTasks: db.dispatchTasks,
-    });
+    };
+    ok(res, payload, payload);
   });
 
   app.get("/api/track-logs", (req, res) => ok(res, readDb().trackLogs));

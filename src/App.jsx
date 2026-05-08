@@ -5,6 +5,7 @@ import {
   DATA_MODE,
   deleteWallPoint,
   dispatchPoints as dispatchPointsApi,
+  getApiBaseUrl,
   getDataModeLabel,
   isLocalDataMode,
   isProxyDataMode,
@@ -38,9 +39,15 @@ function uid(prefix = "id") {
 function getRoute() {
   const url = new URL(window.location.href);
   const parts = url.pathname.split("/").filter(Boolean);
-  if (parts[0] === "worker") return { page: "worker", workerId: parts[1] || url.searchParams.get("worker") || "w1" };
+  if (parts[0] === "worker") return { page: "worker", workerId: getWorkerIdFromUrl() };
   if (parts[0] === "mobile-map") return { page: "mobile-map" };
   return { page: "admin" };
+}
+
+function getWorkerIdFromUrl() {
+  const url = new URL(window.location.href);
+  const match = window.location.pathname.match(/\/worker\/([^/?#]+)/);
+  return decodeURIComponent(match?.[1] || url.searchParams.get("worker") || "w1");
 }
 
 function classifyApiError(error) {
@@ -1335,8 +1342,42 @@ function WorkerPage({ data, workerId }) {
   const [busy, setBusy] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
   const [uploadKind, setUploadKind] = useState("现场照片");
+  const [remoteTasks, setRemoteTasks] = useState([]);
+  const [remoteWorker, setRemoteWorker] = useState(null);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteError, setRemoteError] = useState("");
+  const [lastFetchTime, setLastFetchTime] = useState("");
+  const apiBaseUrl = getApiBaseUrl();
 
-  const worker = data.workers.find((item) => [item.id, item.code, item.worker_key, item.slug].includes(workerId))
+  async function fetchWorkerTasks() {
+    const url = `${getApiBaseUrl()}/api/worker-tasks?workerId=${encodeURIComponent(workerId)}`;
+    setRemoteLoading(true);
+    try {
+      const res = await fetch(url);
+      const body = await res.json();
+      if (!res.ok || body.ok === false) throw new Error(body.error || body.message || "读取任务失败");
+      const payload = body.data || body;
+      const list = payload.taskPoints || payload.points || payload.tasks || [];
+      setRemoteWorker(payload.worker || null);
+      setRemoteTasks(Array.isArray(list) ? list : []);
+      setRemoteError("");
+      setLastFetchTime(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
+    } catch (err) {
+      setRemoteError(String(err?.message || err));
+      if (!supabaseEnv.forceLocalDemo) setRemoteTasks([]);
+    } finally {
+      setRemoteLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchWorkerTasks();
+    const timer = window.setInterval(fetchWorkerTasks, 3000);
+    return () => window.clearInterval(timer);
+  }, [workerId]);
+
+  const worker = remoteWorker
+    || data.workers.find((item) => [item.id, item.code, item.worker_key, item.slug].includes(workerId))
     || data.workers[0]
     || { id: workerId || "w1", code: workerId || "w1", name: workerId === "w2" || workerId === "li" ? "李师傅" : "张师傅", phone: "", car_no: "" };
 
@@ -1344,10 +1385,13 @@ function WorkerPage({ data, workerId }) {
     setIdentity({ name: worker.name || "", phone: worker.phone || "" });
   }, [worker.id]);
 
-  const taskPointIds = data.tasks
+  const fallbackTaskPointIds = data.tasks
     .filter((task) => (task.worker_id || task.workerId) === worker.id)
     .map((task) => task.point_id || task.pointId);
-  const visiblePoints = taskPointIds.length ? data.points.filter((point) => taskPointIds.includes(point.id)) : (isProxyDataMode ? data.points : []);
+  const fallbackPoints = supabaseEnv.forceLocalDemo && fallbackTaskPointIds.length
+    ? data.points.filter((point) => fallbackTaskPointIds.includes(point.id))
+    : [];
+  const visiblePoints = remoteTasks.length ? remoteTasks : fallbackPoints;
   const point = visiblePoints[Math.min(index, Math.max(visiblePoints.length - 1, 0))] || null;
 
   async function handleUpload(event) {
@@ -1359,8 +1403,8 @@ function WorkerPage({ data, workerId }) {
         await data.uploadPhoto({ file, point, worker, kind: uploadKind });
       }
       setLocalMessage(`${point.title} 已上传资料，后台点位状态已自动更新为已完成。`);
-      if (isProxyDataMode) await data.loadWorkerTasks(workerId);
-      else await data.loadAll();
+      await fetchWorkerTasks();
+      if (supabaseEnv.forceLocalDemo) await data.loadAll();
     } catch (error) {
       const issue = classifyApiError(error);
       setLocalMessage(`上传失败：${issue.category}，${issue.detail}`);
@@ -1377,6 +1421,14 @@ function WorkerPage({ data, workerId }) {
         <h1>{worker.name} 的任务</h1>
         <p>一页一个点位，滑动执行。后台发送的点位会按卡片显示，上传成功后自动回写完成状态。</p>
         <small>数据来源：{data.dataSource || (isLocalDataMode ? "本地演示任务" : "真实派单任务")}</small>
+      </section>
+
+      <section className="mobile-debug-panel">
+        <div><span>当前 workerId</span><b>{workerId}</b></div>
+        <div><span>当前 API_BASE_URL</span><b>{apiBaseUrl}</b></div>
+        <div><span>最近读取时间</span><b>{lastFetchTime || "尚未读取"}</b></div>
+        <div><span>最近读取任务数</span><b>{remoteTasks.length}</b></div>
+        <div className={remoteError ? "error" : "ok"}><span>读取错误</span><b>{remoteError || (remoteLoading ? "读取中..." : "无")}</b></div>
       </section>
 
       {(data.message || localMessage) && <section className="info"><strong>{localMessage || data.message}</strong></section>}
@@ -1492,11 +1544,8 @@ function App() {
 
   useEffect(() => {
     if (route.page === "worker") {
-      data.loadWorkerTasks(route.workerId);
-      const timer = window.setInterval(() => {
-        data.loadWorkerTasks(route.workerId);
-      }, 3000);
-      return () => window.clearInterval(timer);
+      if (supabaseEnv.forceLocalDemo) data.loadWorkerTasks(route.workerId);
+      return undefined;
     } else {
       data.loadAll();
     }

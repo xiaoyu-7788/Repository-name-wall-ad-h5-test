@@ -1138,6 +1138,46 @@ a {
   padding: 16px;
 }
 
+.mobile-debug-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 18px;
+  padding: 12px;
+  background: #eff6ff;
+  box-shadow: 0 12px 30px rgba(37, 99, 235, .08);
+}
+
+.mobile-debug-panel div {
+  display: grid;
+  gap: 3px;
+  border-radius: 14px;
+  padding: 9px;
+  background: rgba(255, 255, 255, .72);
+}
+
+.mobile-debug-panel span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mobile-debug-panel b {
+  overflow-wrap: anywhere;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.mobile-debug-panel .error b {
+  color: #b91c1c;
+}
+
+.mobile-debug-panel .ok b {
+  color: #047857;
+}
+
 .identity-grid,
 .mobile-point-info,
 .mobile-contact-grid {
@@ -1287,6 +1327,7 @@ a {
   .upload-lab,
   .library-toolbar,
   .env-grid,
+  .mobile-debug-panel,
   .expanded-toolbar {
     grid-template-columns: 1fr;
   }

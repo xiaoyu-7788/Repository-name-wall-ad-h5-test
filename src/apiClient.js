@@ -9,21 +9,32 @@ function getBrowserHostname() {
   return window.location.hostname || "localhost";
 }
 
+function isLocalHostName(hostname) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
 function inferDefaultMode() {
   const host = getBrowserHostname();
-  const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "::1";
-  return isLocalHost ? "local" : "mock-server";
+  return isLocalHostName(host) ? "local" : "mock-server";
 }
 
-function inferApiBaseUrl() {
+export function getApiBaseUrl() {
   const configured = String(import.meta.env.VITE_API_BASE_URL || "").trim();
   if (configured) return configured.replace(/\/$/, "");
-  return `http://${getBrowserHostname()}:8787`;
+
+  if (typeof window === "undefined") return "http://localhost:8787";
+  const protocol = window.location.protocol || "http:";
+  const hostname = window.location.hostname || "localhost";
+
+  if (isLocalHostName(hostname)) return "http://localhost:8787";
+  return `${protocol}//${hostname}:8787`;
 }
 
-const rawMode = supabaseEnv.forceLocalDemo ? "local" : String(import.meta.env.VITE_DATA_MODE || inferDefaultMode()).toLowerCase();
+const configuredMode = String(import.meta.env.VITE_DATA_MODE || "").toLowerCase();
+const shouldUseMockOnLan = !supabaseEnv.forceLocalDemo && !isLocalHostName(getBrowserHostname()) && configuredMode !== "production-api";
+const rawMode = supabaseEnv.forceLocalDemo ? "local" : (shouldUseMockOnLan ? "mock-server" : (configuredMode || inferDefaultMode()));
 export const DATA_MODE = ["local", "mock-server", "production-api"].includes(rawMode) ? rawMode : inferDefaultMode();
-export const API_BASE_URL = inferApiBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
 
 export const isLocalDataMode = DATA_MODE === "local";
 export const isMockServerMode = DATA_MODE === "mock-server";
