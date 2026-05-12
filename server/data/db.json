@@ -3,11 +3,31 @@
     {
       "id": "加多宝村镇墙体项目",
       "name": "加多宝村镇墙体项目",
+      "materialRules": [
+        "现场照片",
+        "水印照片",
+        "墙租协议图片"
+      ],
+      "material_rules": [
+        "现场照片",
+        "水印照片",
+        "墙租协议图片"
+      ],
       "created_at": "2026-01-01T00:00:00.000Z"
     },
     {
       "id": "阿康化肥春耕项目",
       "name": "阿康化肥春耕项目",
+      "materialRules": [
+        "现场照片",
+        "720 全景",
+        "凯立德图片"
+      ],
+      "material_rules": [
+        "现场照片",
+        "720 全景",
+        "凯立德图片"
+      ],
       "created_at": "2026-01-01T00:00:00.000Z"
     }
   ],
@@ -16,21 +36,73 @@
       "id": "w1",
       "code": "zhang",
       "worker_key": "zhang",
+      "workerKey": "zhang",
       "slug": "zhang",
+      "accessToken": "tk_ZHANGSAFEAB2",
+      "access_token": "tk_ZHANGSAFEAB2",
       "name": "张师傅",
       "phone": "13800000001",
       "car_no": "粤A·工001",
-      "created_at": "2026-01-01T00:00:00.000Z"
+      "carNo": "粤A·工001",
+      "teamType": "install",
+      "teamTypeName": "安装队伍",
+      "projectId": "jiaduobao",
+      "project_name": "加多宝村镇墙体项目",
+      "enabled": true,
+      "online": false,
+      "lng": 113.3668,
+      "lat": 23.2618,
+      "speed": 28,
+      "moving": true,
+      "stoppedSeconds": 0,
+      "status": "行驶中",
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "project_id": "jiaduobao",
+      "lastSeenAt": null,
+      "lastOnlineAt": null,
+      "lastOfflineAt": null,
+      "lastLocationAt": null,
+      "last_seen_at": null,
+      "last_online_at": null,
+      "last_offline_at": null,
+      "last_location_at": null,
+      "updatedAt": "2026-05-11T00:56:19.914Z"
     },
     {
       "id": "w2",
       "code": "li",
       "worker_key": "li",
+      "workerKey": "li",
       "slug": "li",
+      "accessToken": "tk_LEESAFEABCD2",
+      "access_token": "tk_LEESAFEABCD2",
       "name": "李师傅",
       "phone": "13800000002",
       "car_no": "粤A·工002",
-      "created_at": "2026-01-01T00:00:00.000Z"
+      "carNo": "粤A·工002",
+      "teamType": "wall",
+      "teamTypeName": "找墙队伍",
+      "projectId": "jiaduobao",
+      "project_name": "加多宝村镇墙体项目",
+      "enabled": true,
+      "online": false,
+      "lng": 113.2156,
+      "lat": 23.1076,
+      "speed": 0,
+      "moving": false,
+      "stoppedSeconds": 300,
+      "status": "已停止",
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "project_id": "jiaduobao",
+      "lastSeenAt": null,
+      "lastOnlineAt": null,
+      "lastOfflineAt": null,
+      "lastLocationAt": null,
+      "last_seen_at": null,
+      "last_online_at": null,
+      "last_offline_at": null,
+      "last_location_at": null,
+      "updatedAt": "2026-05-11T00:56:19.914Z"
     }
   ],
   "wallPoints": [
@@ -76,5 +148,6 @@
   ],
   "dispatchTasks": [],
   "pointMedia": [],
-  "trackLogs": []
+  "trackLogs": [],
+  "workerLocations": []
 }

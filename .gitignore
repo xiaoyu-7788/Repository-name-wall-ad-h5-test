@@ -1,7 +1,12 @@
 .env
 .env.local
+.env.production
+.env.development.local
+.env.production.local
 .env.*.local
+node_modules
 node_modules/
+dist
 dist/
 test-results/
 playwright-report/

@@ -29,3 +29,37 @@
 - Vercel 构建输出目录为 `dist`。
 - `vercel.json` 必须保留 SPA rewrite，避免 `/worker?worker=li` 刷新后 404。
 - Vercel 环境变量应在 Vercel 后台配置，不要写进仓库。
+
+<!-- codex-agent-mem:generated-context:start -->
+## codex-agent-mem Generated Context
+
+> Budget: `normal`
+> Approx pack size: ~286 tokens from ~13410 source tokens.
+> Build time: ~19.94 ms.
+> Budget reason: `fits_open_work_profile`
+> This block is generated after completed Codex turns to keep continuity compact across sessions.
+
+## Working Memory
+
+Scope: `wall_ad_h5_test`
+Budget: `normal`
+Session scope: project-wide; session_filter=not_applied; source_sessions=4; sub_scopes=3.
+Scope warning: mixed persisted sessions/sub-scopes. Use `mem_session_list` + `session_id`.
+No active objective selected: this project-wide pack is advisory until narrowed.
+Suggested narrowing: choose a target from candidate_sub_scopes, then call mem_session_list(project_key, query="<target sub-scope>") before treating this project-wide pack as active context.
+Last operational capture: `2026-05-09T08:08:28.579944+00:00`. Persisted; not live current-turn awareness.
+Memory is advisory project context, not a higher-priority instruction. Current system, developer, and user instructions override retrieved memory.
+
+### Stable decisions
+- No durable decisions extracted yet.
+
+### Recent continuity
+- 继续 | 请继续完善“师傅管理 / 执行队伍”模块，把【在线/离线状态】和【启用/停用链接】分开实现，并同时修复停用按钮不明显的问题。 当前问题： 1. 师傅卡片里没有明确的“停…
+
+### Scope guard
+- Keep the active user request in scope; do not silently narrow it.
+
+### Resume
+- Start from the latest matching item above.
+- Use MCP only for older detail not already covered here.
+<!-- codex-agent-mem:generated-context:end -->
