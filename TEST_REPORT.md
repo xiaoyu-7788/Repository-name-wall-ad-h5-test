@@ -1,3 +1,29 @@
+## 39. Vercel API health 线上 404 二次修复
+
+更新时间：2026-05-12。
+
+本次只处理线上 `https://repository-name-wall-ad-h5-test.vercel.app/api/health` 返回 `404 NOT_FOUND` 的 Vercel 路由识别问题。
+
+修复内容：
+- 确认 `api/health.js` 位于项目根目录，与 `src/`、`package.json` 同级。
+- 将 `api/health.js` 改为 Vercel 官方兼容的 `export default function handler(req, res)` 写法，返回 `ok`、`message` 和当前时间。
+- 将 `vercel.json` 从负向正则 `rewrites` 改为 `routes`：先把 `/api/(.*)` 交给 `/api/$1`，再 `handle: filesystem`，最后才将前端页面 fallback 到 `/index.html`。
+- 这样可以避免 `/api/*` 被 SPA fallback 或不稳定正则规则影响。
+
+验证命令：
+```bash
+npm run build
+```
+
+验证结果：
+- `npm run build` 通过。
+- 构建仍有 chunk 体积 warning，不影响部署。
+
+线上部署后复查地址：
+```text
+https://repository-name-wall-ad-h5-test.vercel.app/api/health
+```
+
 # TEST_REPORT
 
 ## 1. 运行过的命令
