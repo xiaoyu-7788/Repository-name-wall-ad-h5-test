@@ -2110,6 +2110,7 @@ npm run test:e2e
 页面结构调整结果：
 
 - 顶部已改为 `管理后台 / Point Center` + `点位管理`。
+- 左侧导航中的点位英文标签也已同步为 `Point Center`，避免线上页面继续出现旧版 `Point Management`。
 - 右侧已保留 `标签管理`、`批量导入`、`新增点位`。
 - 页面主体顺序已调整为 `header` -> `pointToolbar` -> `pointBatchBar` -> `pointTableWrap`。
 - `pointToolbar` 已包含：搜索框、`全部状态`、`异常筛选`、`批量打标签`、`批量移除标签`、`导入模板`。

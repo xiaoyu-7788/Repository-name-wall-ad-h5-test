@@ -52,7 +52,7 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     await expect(page.locator(".map-console-layout")).toBeVisible();
     await expect(page.getByText("点位图层")).toBeVisible();
 
-    await goPage(page, "点位管理 Point Management", "点位管理");
+    await goPage(page, "点位管理 Point Center", "点位管理");
     await expect(page.locator(".points-table")).toBeVisible();
 
     await goPage(page, "师傅管理 Worker Management", "师傅管理");
@@ -73,7 +73,7 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
 
   test("点位管理支持表格、搜索、筛选、分页、新增编辑删除入口", async ({ page }) => {
     await resetDemoData(page);
-    await goPage(page, "点位管理 Point Management", "点位管理");
+    await goPage(page, "点位管理 Point Center", "点位管理");
     await expect(page.getByText("管理后台 / Point Center")).toBeVisible();
     await expect(page.getByRole("heading", { name: "点位管理" })).toBeVisible();
     await expect(page.getByRole("button", { name: "标签管理", exact: true })).toBeVisible();
@@ -129,7 +129,7 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     expect(state.points.every((point) => statuses.includes(point.status))).toBeTruthy();
     expect(state.projects.every((project) => Array.isArray(project.materialRules))).toBeTruthy();
 
-    await goPage(page, "点位管理 Point Management", "点位管理");
+    await goPage(page, "点位管理 Point Center", "点位管理");
     await expect(page.getByPlaceholder("搜索点位编号 / 地址 / 项目")).toBeVisible();
     await expect(page.locator(".pointToolbar")).toContainText("全部状态");
 

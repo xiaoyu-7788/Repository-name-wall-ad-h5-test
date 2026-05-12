@@ -6,7 +6,7 @@ export const DEFAULT_PROJECT_MATERIAL_RULES = ["现场照片"];
 export const PAGE_ITEMS = [
   { key: "dashboard", path: "/admin/dashboard", label: "运营总览", en: "Operations", icon: "▦" },
   { key: "map", path: "/admin/map", label: "地图调度", en: "Map Console", icon: "⌖" },
-  { key: "points", path: "/admin/points", label: "点位管理", en: "Point Management", icon: "⌗" },
+  { key: "points", path: "/admin/points", label: "点位管理", en: "Point Center", icon: "⌗" },
   { key: "workers", path: "/admin/workers", label: "师傅管理", en: "Worker Management", icon: "◇" },
   { key: "dispatch", path: "/admin/dispatch", label: "派单中心", en: "Dispatch Center", icon: "↗" },
   { key: "projects", path: "/admin/projects", label: "项目管理", en: "Project Management", icon: "◫" },
