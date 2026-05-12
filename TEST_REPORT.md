@@ -2059,3 +2059,28 @@ https://repository-name-wall-ad-h5-test.vercel.app/api/wall-points
 ```
 
 预期：先返回空数组或已有点位；在前端新增 `TEST-001` 后，再访问该接口应能在 `data` 数组中看到 `TEST-001`。
+## 42. `/admin/points` 第二版新版界面升级
+
+更新时间：2026-05-12 15:41:14 +08:00。
+
+本次只升级点位管理页，不改动 `/api/wall-points` Supabase 读写主链路。
+
+完成内容：
+
+- `/admin/points` 升级为第二版正式业务界面：新增顶部点位概览、紧凑筛选区、正式表格壳层和新版详情抽屉。
+- 点位表格继续保留查看、编辑、现场查看、派单、素材、验收、删除入口。
+- 前端展示兼容 `point_code/title/name`、`detail_address/address`、`longitude/lng`、`latitude/lat`、`captain_* / install_captain_*`、`scout_* / wall_team_*` 等字段。
+- 新增点位弹窗仍使用现有保存流程，继续写入 Supabase；本次未修改数据库 API 写入逻辑。
+- 表格继续显示项目、地址、K码、状态、房东、当前师傅、素材完成、缺失素材、可验收、施工队长、找墙队伍、最近更新时间、异常状态和操作按钮。
+
+已执行验证：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build` 通过；仅有 Vite chunk 体积 warning，不影响部署。
+- `npm run test:e2e` 通过，11/11 passed。

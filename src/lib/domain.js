@@ -142,6 +142,34 @@ export function getProjectName(point) {
   return point?.project_name || point?.projectName || "未分配项目";
 }
 
+export function getPointCode(point) {
+  return point?.point_code || point?.title || point?.name || point?.code || point?.id || "未命名点位";
+}
+
+export function getPointAddress(point) {
+  return point?.detail_address || point?.address || point?.addr || "未登记地址";
+}
+
+export function getPointUpdatedAt(point) {
+  return point?.updated_at || point?.updatedAt || point?.created_at || point?.createdAt || "";
+}
+
+export function getPointCreatedAt(point) {
+  return point?.created_at || point?.createdAt || "";
+}
+
+export function getPointLongitude(point) {
+  const value = point?.longitude ?? point?.lng;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+export function getPointLatitude(point) {
+  const value = point?.latitude ?? point?.lat;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
 export function normalizePointStatus(value, fallback = "待派单") {
   const raw = String(value || "").trim();
   if (STATUS.includes(raw)) return raw;
@@ -177,19 +205,19 @@ export function getCity(point) {
 }
 
 export function getCaptainName(point) {
-  return point?.captain_name || point?.captainName || point?.leader_name || "未登记";
+  return point?.captain_name || point?.install_captain_name || point?.captainName || point?.leader_name || "未登记";
 }
 
 export function getCaptainPhone(point) {
-  return point?.captain_phone || point?.captainPhone || point?.leader_phone || "未登记";
+  return point?.captain_phone || point?.install_captain_phone || point?.captainPhone || point?.leader_phone || "未登记";
 }
 
 export function getScoutName(point) {
-  return point?.scout_name || point?.scoutName || point?.finder_name || "未登记";
+  return point?.scout_name || point?.wall_team_name || point?.scoutName || point?.finder_name || "未登记";
 }
 
 export function getScoutPhone(point) {
-  return point?.scout_phone || point?.scoutPhone || point?.finder_phone || "未登记";
+  return point?.scout_phone || point?.wall_team_phone || point?.scoutPhone || point?.finder_phone || "未登记";
 }
 
 export function normalizeMediaKind(value, fallback = "现场照片") {
@@ -221,7 +249,13 @@ export function mediaKind(photo) {
 }
 
 export function pointMedia(point, photos = []) {
-  return photos.filter((photo) => (photo.point_id || photo.pointId) === point?.id);
+  const linked = photos.filter((photo) => (photo.point_id || photo.pointId) === point?.id);
+  if (linked.length) return linked;
+  return [
+    ...(Array.isArray(point?.photos) ? point.photos : []),
+    ...(Array.isArray(point?.videos) ? point.videos : []),
+    ...(Array.isArray(point?.media) ? point.media : []),
+  ];
 }
 
 export function mediaCounts(point, photos = []) {
@@ -354,8 +388,8 @@ export function pointTags(point, photos = []) {
 }
 
 export function pointLngLat(point) {
-  const lng = Number(point?.lng);
-  const lat = Number(point?.lat);
+  const lng = getPointLongitude(point);
+  const lat = getPointLatitude(point);
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
   return [lng, lat];
 }

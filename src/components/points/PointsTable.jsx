@@ -3,8 +3,11 @@ import React from "react";
 import {
   cnTime,
   getCaptainName,
+  getPointAddress,
   getPointAnomalies,
+  getPointCode,
   getPointStatus,
+  getPointUpdatedAt,
   getProjectName,
   getScoutName,
   assignedWorkersForPoint,
@@ -13,6 +16,20 @@ import {
 } from "../../lib/domain";
 import { EmptyState } from "../shared/EmptyState";
 import { StatusPill } from "../shared/StatusBadge";
+
+function AcceptanceBadge({ ready }) {
+  return <span className={`status-badge ${ready ? "success" : "warning"}`}>{ready ? "可验收" : "待补齐"}</span>;
+}
+
+function MaterialCell({ completion }) {
+  return (
+    <div className="points-v2-material">
+      <strong>{completion.completedCount}/{completion.requiredCount}</strong>
+      <span>{completion.status}</span>
+      <em>{completion.ratio}%</em>
+    </div>
+  );
+}
 
 export function PointsTable({
   points,
@@ -43,85 +60,138 @@ export function PointsTable({
     }));
   }
 
-  if (!points.length) return <EmptyState title="暂无点位" description="当前筛选没有点位，可新增或导入点位。" />;
+  if (!points.length) {
+    return <EmptyState title="暂无点位" description="当前筛选结果为空，可继续调整筛选条件或新增点位。" />;
+  }
 
   return (
-    <div className="enterprise-table-wrap points-table">
-      <table className="enterprise-table">
-        <thead>
-          <tr>
-            <th><input type="checkbox" checked={points.every((point) => selectedIds.includes(point.id))} onChange={(event) => toggleAll(event.target.checked)} /></th>
-            <th><button type="button" onClick={() => toggleSort("title")}>点位编号</button></th>
-            <th><button type="button" onClick={() => toggleSort("project")}>项目</button></th>
-            <th>地址</th>
-            <th>K码</th>
-            <th><button type="button" onClick={() => toggleSort("status")}>状态</button></th>
-            <th>房东</th>
-            <th>当前师傅</th>
-            <th>必传素材完成</th>
-            <th>缺什么素材</th>
-            <th>可验收</th>
-            <th>施工队长</th>
-            <th>找墙队伍</th>
-            <th><button type="button" onClick={() => toggleSort("updated")}>最近更新时间</button></th>
-            <th>异常状态</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((point) => {
-            const anomalies = getPointAnomalies(point, photos, tasks, projects);
-            const assigned = assignedWorkersForPoint(point, tasks, workers);
-            const completion = pointMaterialCompletion(point, photos, projects);
-            const ready = isPointReadyForAcceptance(point, photos, projects);
-            return (
-              <tr key={point.id}>
-                <td><input type="checkbox" checked={selectedIds.includes(point.id)} onChange={() => setSelectedIds((current) => current.includes(point.id) ? current.filter((id) => id !== point.id) : [...current, point.id])} /></td>
-                <td><b>{point.title || point.id}</b></td>
-                <td>{getProjectName(point)}</td>
-                <td className="wide-cell">{point.address || "未登记"}</td>
-                <td>{point.k_code || "未登记"}</td>
-                <td><StatusPill status={getPointStatus(point)} /></td>
-                <td>{point.landlord_name || "未登记"}</td>
-                <td>{assigned.length ? assigned.map((worker) => worker.name).join("、") : "未派单"}</td>
-                <td>
-                  <div className="material-completion-cell">
-                    <b>{completion.status}</b>
-                    <span>{completion.completedCount}/{completion.requiredCount} · {completion.ratio}%</span>
-                  </div>
-                </td>
-                <td>
-                  <div className="anomaly-chip-list material-missing-list">
-                    {completion.missing.length ? completion.missing.map((item) => <span key={item}>缺{item}</span>) : <span className="ok">已齐套</span>}
-                  </div>
-                </td>
-                <td><span className={`status-badge ${ready ? "success" : "warning"}`}>{ready ? "可验收" : "待补齐"}</span></td>
-                <td>{getCaptainName(point)}</td>
-                <td>{getScoutName(point)}</td>
-                <td>{cnTime(point.updated_at || point.created_at)}</td>
-                <td>
-                  <div className="anomaly-chip-list">
-                    {anomalies.length ? anomalies.slice(0, 3).map((item) => <span key={item}>{item}</span>) : <span className="ok">正常</span>}
-                    {anomalies.length > 3 && <span>+{anomalies.length - 3}</span>}
-                  </div>
-                </td>
-                <td>
-                  <div className="row-actions">
-                    <button type="button" onClick={() => onView(point)}>查看</button>
-                    <button type="button" onClick={() => onEdit(point)}>编辑</button>
-                    <button type="button" onClick={() => onSite(point)}>现场查看</button>
-                    <button type="button" onClick={() => onDispatch(point)}>派单</button>
-                    <button type="button" onClick={() => onMedia(point)}>素材</button>
-                    <button type="button" onClick={() => onAcceptance(point)}>验收</button>
-                    <button type="button" className="danger-text" onClick={() => onDelete(point)}>删除</button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <div className="table-sort-hint">排序：{sort.key} / {sort.dir === "asc" ? "升序" : "降序"}</div>
-    </div>
+    <section className="points-v2-table-shell">
+      <div className="points-v2-table-head">
+        <div>
+          <h2>点位清单</h2>
+          <p>正式表格直接承接当前 Supabase 数据，支持派单、素材、验收和现场查看。</p>
+        </div>
+        <div className="points-v2-sort">
+          <span>排序</span>
+          <b>{sort.key} / {sort.dir === "asc" ? "升序" : "降序"}</b>
+        </div>
+      </div>
+
+      <div className="enterprise-table-wrap points-table points-v2-table-wrap">
+        <table className="enterprise-table points-v2-table">
+          <thead>
+            <tr>
+              <th className="checkbox-col">
+                <input type="checkbox" checked={points.length > 0 && points.every((point) => selectedIds.includes(point.id))} onChange={(event) => toggleAll(event.target.checked)} />
+              </th>
+              <th><button type="button" onClick={() => toggleSort("title")}>点位编号</button></th>
+              <th><button type="button" onClick={() => toggleSort("project")}>项目</button></th>
+              <th>地址</th>
+              <th>K码</th>
+              <th><button type="button" onClick={() => toggleSort("status")}>状态</button></th>
+              <th>房东</th>
+              <th>当前师傅</th>
+              <th>必传素材完成</th>
+              <th>缺什么素材</th>
+              <th>可验收</th>
+              <th>施工队长</th>
+              <th>找墙队伍</th>
+              <th><button type="button" onClick={() => toggleSort("updated")}>最近更新时间</button></th>
+              <th>异常状态</th>
+              <th>操作按钮</th>
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((point) => {
+              const anomalies = getPointAnomalies(point, photos, tasks, projects);
+              const assigned = assignedWorkersForPoint(point, tasks, workers);
+              const completion = pointMaterialCompletion(point, photos, projects);
+              const ready = isPointReadyForAcceptance(point, photos, projects);
+              const selected = selectedIds.includes(point.id);
+
+              return (
+                <tr key={point.id} className={selected ? "selected-row" : ""}>
+                  <td className="checkbox-col">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => setSelectedIds((current) => current.includes(point.id) ? current.filter((id) => id !== point.id) : [...current, point.id])}
+                    />
+                  </td>
+                  <td>
+                    <div className="points-v2-code-cell">
+                      <strong>{getPointCode(point)}</strong>
+                      <span>{point.id}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="points-v2-project-cell">
+                      <b>{getProjectName(point)}</b>
+                    </div>
+                  </td>
+                  <td className="wide-cell">
+                    <div className="points-v2-address-cell">
+                      <strong>{getPointAddress(point)}</strong>
+                    </div>
+                  </td>
+                  <td>{point.k_code || "-"}</td>
+                  <td><StatusPill status={getPointStatus(point)} /></td>
+                  <td>
+                    <div className="points-v2-person-cell">
+                      <strong>{point.landlord_name || "-"}</strong>
+                      <span>{point.landlord_phone || "未登记手机号"}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="points-v2-person-cell">
+                      <strong>{assigned.length ? assigned.map((worker) => worker.name).join("、") : "未派单"}</strong>
+                      <span>{assigned.length ? `${assigned.length} 位师傅` : "等待派单"}</span>
+                    </div>
+                  </td>
+                  <td><MaterialCell completion={completion} /></td>
+                  <td>
+                    <div className="anomaly-chip-list material-missing-list">
+                      {completion.missing.length ? completion.missing.map((item) => <span key={item}>缺{item}</span>) : <span className="ok">已齐套</span>}
+                    </div>
+                  </td>
+                  <td><AcceptanceBadge ready={ready} /></td>
+                  <td>
+                    <div className="points-v2-person-cell">
+                      <strong>{getCaptainName(point)}</strong>
+                      <span>{point.captain_phone || point.install_captain_phone || "未登记手机号"}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="points-v2-person-cell">
+                      <strong>{getScoutName(point)}</strong>
+                      <span>{point.scout_phone || point.wall_team_phone || "未登记手机号"}</span>
+                    </div>
+                  </td>
+                  <td>{cnTime(getPointUpdatedAt(point))}</td>
+                  <td>
+                    <div className="anomaly-chip-list">
+                      {anomalies.length ? anomalies.slice(0, 3).map((item) => <span key={item}>{item}</span>) : <span className="ok">正常</span>}
+                      {anomalies.length > 3 && <span>+{anomalies.length - 3}</span>}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="row-actions points-v2-actions">
+                      <button type="button" onClick={() => onView(point)}>查看</button>
+                      <button type="button" onClick={() => onEdit(point)}>编辑</button>
+                      <button type="button" onClick={() => onSite(point)}>现场查看</button>
+                      <button type="button" onClick={() => onDispatch(point)}>派单</button>
+                      <button type="button" onClick={() => onMedia(point)}>素材</button>
+                      <button type="button" onClick={() => onAcceptance(point)}>验收</button>
+                      <button type="button" className="danger-text" onClick={() => onDelete(point)}>删除</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div className="table-sort-hint">当前结果已按 {sort.key} {sort.dir === "asc" ? "升序" : "降序"} 排列</div>
+      </div>
+    </section>
   );
 }
