@@ -46,18 +46,18 @@ export function useH5Data() {
     setLoading(true);
     try {
       const state = await proxyApi.loadState();
-      applyState(state, isLocalDataMode ? "本地演示数据" : isSupabaseDataMode ? "Supabase 正式数据" : "国内接口数据");
+      applyState(state, isLocalDataMode ? "本地演示数据" : isSupabaseDataMode ? "数据库已连接" : "同源 API 数据");
       if (!message) {
         setMessage(isLocalDataMode
           ? "当前未连接正式数据库，系统正在使用演示数据。"
           : isSupabaseDataMode
-            ? "已连接 Supabase 正式数据库。"
+            ? "Supabase 正式数据模式，数据库已连接。"
             : `已连接 ${API_BASE_URL || "同源 /api"}`);
       }
     } catch (error) {
       const issue = classifyApiError(error);
       setMessage(`${issue.category}：${issue.detail}`);
-      if (isSupabaseDataMode) {
+      if (isLocalDataMode) {
         const fallback = await proxyApi.loadDemoState();
         applyState(fallback, "本地演示数据");
         setMessage(`${issue.category}：${issue.detail}。当前已临时切换为演示数据，避免页面不可用。`);
@@ -120,7 +120,7 @@ export function useH5Data() {
     setLoading(true);
     try {
       await proxyApi.addPoints(newPoints);
-      setMessage(`已新增 ${newPoints.length} 个点位。`);
+      setMessage("保存成功");
       await loadAll();
     } catch (error) {
       const issue = classifyApiError(error);
@@ -135,7 +135,7 @@ export function useH5Data() {
     setLoading(true);
     try {
       await proxyApi.updatePoint(point.id, point);
-      setMessage(`已保存点位 ${point.title || point.id}。`);
+      setMessage("保存成功");
       await loadAll();
     } catch (error) {
       const issue = classifyApiError(error);

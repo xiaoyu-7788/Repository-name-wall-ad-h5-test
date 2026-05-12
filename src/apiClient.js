@@ -638,12 +638,12 @@ async function requestApi(path, options = {}) {
 }
 
 async function remoteState() {
-  const [projects, workers, points, trackLogs] = await Promise.all([
+  const [projects, points] = await Promise.all([
     requestApi("/api/projects?action=list"),
-    requestApi("/api/workers?action=list&includeDisabled=true"),
     requestApi("/api/wall-points"),
-    requestApi("/api/system?action=track-logs"),
   ]);
+  const workers = await requestApi("/api/workers?action=list&includeDisabled=true").catch(() => []);
+  const trackLogs = await requestApi("/api/system?action=track-logs").catch(() => []);
   const media = await requestApi("/api/media?action=list").catch(() => []);
   const tasks = await requestApi("/api/dispatch?action=tasks").catch(() => []);
   return normalizeState({ projects, workers, wallPoints: points, dispatchTasks: tasks, pointMedia: media, trackLogs });
@@ -1166,10 +1166,8 @@ export async function saveWallPoint(point) {
     return next;
   }
   const payload = { ...point };
-  const isNewPoint = Boolean(payload.__isNew) || !payload.id;
   delete payload.__isNew;
-  if (isNewPoint) return requestApi("/api/wall-points", { method: "POST", body: JSON.stringify(payload) });
-  return requestApi(`/api/wall-points?action=update&id=${encodeURIComponent(payload.id)}`, { method: "PUT", body: JSON.stringify(payload) });
+  return requestApi("/api/wall-points", { method: "POST", body: JSON.stringify(payload) });
 }
 
 export async function deleteWallPoint(pointId) {

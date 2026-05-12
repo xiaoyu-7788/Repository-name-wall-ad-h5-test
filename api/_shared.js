@@ -97,8 +97,11 @@ function classifyError(error) {
   if (code === "401" || code === "403" || lowered.includes("jwt") || lowered.includes("api key") || lowered.includes("invalid")) {
     return { category: "环境变量错误", detail: "SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY 不正确，或 key 与项目不匹配。" };
   }
-  if (code === "42P01" || lowered.includes("relation") || lowered.includes("schema cache")) {
-    return { category: "表不存在", detail: "Supabase 表不存在，请运行 supabase/schema.sql。" };
+  if (code === "42P01" || lowered.includes("relation")) {
+    return { category: "Supabase 表读取失败", detail: message || "Supabase 返回表读取错误。" };
+  }
+  if (code === "PGRST204" || code === "42703" || lowered.includes("schema cache") || lowered.includes("column")) {
+    return { category: "Supabase 字段不匹配", detail: message || "Supabase 返回字段不匹配错误，请检查线上表字段。" };
   }
   if (code === "42501" || lowered.includes("row-level security") || lowered.includes("permission denied") || lowered.includes("rls")) {
     return { category: "RLS权限问题", detail: "数据库权限被拒绝，请检查 RLS policy。" };

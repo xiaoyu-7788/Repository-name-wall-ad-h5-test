@@ -1989,6 +1989,42 @@ npm run test:api
 补充 API 回归结果：
 - `npm run test:api` 通过。
 - 已确认 `/api/health`、`/api/dispatch`、`/api/worker-tasks/w1`、`/api/point-media/:pointId`、`/api/worker-location`、`/api/debug-state`、`/api/complete-point/:pointId` 等旧链路仍可用。
+## 41. 点位保存正式 API 与数据库连接状态修复
+
+更新时间：2026-05-12 14:37:14 +08:00。
+
+本次继续处理线上 `/admin/points` 保存点位失败和左下角误显示“本地演示数据”的问题。
+
+修复内容：
+
+- 前端点位保存统一调用 `POST /api/wall-points`，新增和编辑都由后端按 `id` upsert。
+- 后台主数据加载只把 `/api/projects` 和 `/api/wall-points` 作为核心连接判断；`workers`、`dispatch`、`media`、`track_logs` 作为可选数据源，失败时返回空数组，不再导致整站降级为本地演示数据。
+- Supabase 正式模式加载成功后，左下角数据源显示为“Supabase 正式数据模式 / 数据库已连接”。
+- 前端不再把后端错误二次翻译成“请运行 supabase/schema.sql”；保存失败会直接展示后端返回的错误类别与详情。
+- `/api/wall-points` 增加 Supabase schema cache / 可选列缺失的降级重试：先写完整字段，若线上表缺少 `city/tags/completed_at` 等可选列，则自动改用核心字段再次写入。
+
+已执行验证：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build` 通过；仅有 Vite chunk 体积 warning，不影响部署。
+- `npm run test:e2e` 通过，11/11 passed。
+- 本地 API 函数级验证通过：模拟 Supabase schema cache 缺列错误后，`POST /api/wall-points` 可自动降级重试并写入 `TEST-001`。
+
+线上复查建议：
+
+```text
+https://repository-name-wall-ad-h5-test.vercel.app/api/projects
+https://repository-name-wall-ad-h5-test.vercel.app/api/wall-points
+```
+
+在 `/admin/points` 新增 `TEST-001` 后，再访问 `/api/wall-points`，应能在 `data` 数组看到该点位。
+
 ## 40. 新增点位真实写入 Supabase 修复
 
 更新时间：2026-05-12 12:50:41 +08:00。

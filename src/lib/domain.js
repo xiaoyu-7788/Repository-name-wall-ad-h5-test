@@ -82,11 +82,11 @@ export function classifyApiError(error) {
   if (/SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|VITE_SUPABASE_URL|VITE_SUPABASE_ANON_KEY|SERVER_ENV_MISSING/i.test(detail)) {
     return { category: "数据库连接异常", detail: "数据库环境变量未配置完整，请检查 Vercel 的 Supabase 环境变量。" };
   }
-  if (/relation|does not exist|schema cache|42P01/i.test(detail) || error?.code === "42P01") {
-    return { category: "数据库表缺失", detail: "Supabase 表结构未创建或字段未刷新，请运行项目提供的 supabase/schema.sql。" };
-  }
   if (error?.category || error?.detail) {
     return { category: error.category || "接口连接失败", detail: error.detail || message };
+  }
+  if (/relation|does not exist|schema cache|42P01/i.test(detail) || error?.code === "42P01") {
+    return { category: "数据库返回错误", detail };
   }
   if (/failed to fetch|network|load failed/i.test(message)) {
     return { category: "接口连接失败", detail: "浏览器无法访问 API，请检查公网域名、HTTPS、端口、反向代理和跨域设置。" };

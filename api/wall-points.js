@@ -48,6 +48,44 @@ function pointRow(input = {}, fixedId = "") {
   };
 }
 
+function requiredPointRow(input = {}, fixedId = "") {
+  const row = pointRow(input, fixedId);
+  return {
+    id: row.id,
+    title: row.title,
+    k_code: row.k_code,
+    address: row.address,
+    project_name: row.project_name,
+    status: row.status,
+    landlord_name: row.landlord_name,
+    landlord_phone: row.landlord_phone,
+    captain_name: row.captain_name,
+    captain_phone: row.captain_phone,
+    scout_name: row.scout_name,
+    scout_phone: row.scout_phone,
+    lng: row.lng,
+    lat: row.lat,
+    updated_at: row.updated_at,
+    created_at: row.created_at,
+  };
+}
+
+function isSchemaColumnError(error) {
+  const message = String(error?.message || error?.details || error || "").toLowerCase();
+  return error?.code === "PGRST204" || error?.code === "42703" || message.includes("schema cache") || message.includes("column");
+}
+
+async function upsertPoint(supabase, input = {}, fixedId = "") {
+  const fullRow = pointRow(input, fixedId);
+  let result = await supabase.from("wall_points").upsert(fullRow, { onConflict: "id" }).select("*").single();
+  if (!result.error || !isSchemaColumnError(result.error)) return result;
+
+  const fallbackRow = requiredPointRow(input, fixedId);
+  result = await supabase.from("wall_points").upsert(fallbackRow, { onConflict: "id" }).select("*").single();
+  if (result.error) result.error.originalColumnError = true;
+  return result;
+}
+
 module.exports = async function handler(req, res) {
   const supabase = requireSupabase(res);
   if (!supabase) return;
@@ -64,7 +102,7 @@ module.exports = async function handler(req, res) {
     if (action === "create") {
       if (!["POST", "PUT", "PATCH"].includes(req.method)) return methodNotAllowed(res, ["POST", "PUT", "PATCH"]);
       const body = parseBody(req);
-      const { data, error } = await supabase.from("wall_points").upsert(pointRow(body), { onConflict: "id" }).select("*").single();
+      const { data, error } = await upsertPoint(supabase, body);
       if (error) throw error;
       return sendJson(res, 200, { ok: true, data });
     }
@@ -73,8 +111,7 @@ module.exports = async function handler(req, res) {
       if (!["POST", "PUT", "PATCH"].includes(req.method)) return methodNotAllowed(res, ["POST", "PUT", "PATCH"]);
       const id = req.query.id;
       const body = parseBody(req);
-      const row = pointRow(body, id);
-      const { data, error } = await supabase.from("wall_points").upsert(row, { onConflict: "id" }).select("*").single();
+      const { data, error } = await upsertPoint(supabase, body, id);
       if (error) throw error;
       return sendJson(res, 200, { ok: true, data });
     }
