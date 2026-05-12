@@ -74,14 +74,28 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
   test("点位管理支持表格、搜索、筛选、分页、新增编辑删除入口", async ({ page }) => {
     await resetDemoData(page);
     await goPage(page, "点位管理 Point Management", "点位管理");
-    await expect(page.locator(".enterprise-table tbody tr")).toHaveCount(3);
-    await expect(page.locator(".enterprise-table")).toContainText("GZ-BY-001");
+    await expect(page.getByText("管理后台 / Point Center")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "点位管理" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "标签管理", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "批量导入", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "新增点位", exact: true })).toBeVisible();
+    await expect(page.locator(".pointToolbar")).toBeVisible();
+    await expect(page.locator(".pointBatchBar")).toContainText("点击任意点位行即可多选");
+    await expect(page.locator(".pointTableWrap")).toBeVisible();
+    await expect(page.locator(".pointTableWrap")).toContainText("点位编号");
+    await expect(page.locator(".pointTableWrap")).toContainText("项目 / 标签");
+    await expect(page.locator(".pointTableWrap")).toContainText("师傅 / 队伍");
+    await expect(page.locator(".pointTableWrap")).toContainText("素材情况");
+    await expect(page.locator(".pointToolbar")).toContainText("批量打标签");
+    await expect(page.locator(".pointToolbar")).toContainText("批量移除标签");
+    await expect(page.locator(".pointToolbar")).toContainText("导入模板");
+    await expect(page.locator(".pointTableWrap .enterprise-table tbody tr")).toHaveCount(3);
+    await expect(page.locator(".pointTableWrap")).toContainText("GZ-BY-001");
+    await expect(page.locator("body")).not.toContainText("执行台账中心");
 
-    await page.getByPlaceholder("搜索编号、地址、K码、房东、队伍").fill("GZ-BY-001");
-    await expect(page.locator(".enterprise-table tbody tr")).toHaveCount(1);
-    await expect(page.locator(".enterprise-table")).toContainText("GZ-BY-001");
-    await expect(page.locator(".enterprise-table")).toContainText("必传素材");
-    await expect(page.locator(".enterprise-table")).toContainText("可验收");
+    await page.getByPlaceholder("搜索点位编号 / 地址 / 项目").fill("GZ-BY-001");
+    await expect(page.locator(".pointTableWrap .enterprise-table tbody tr")).toHaveCount(1);
+    await expect(page.locator(".pointTableWrap")).toContainText("GZ-BY-001");
 
     await page.getByRole("button", { name: "新增点位", exact: true }).click();
     await expect(page.getByRole("dialog")).toContainText("点位编辑 / 上传");
@@ -116,7 +130,8 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     expect(state.projects.every((project) => Array.isArray(project.materialRules))).toBeTruthy();
 
     await goPage(page, "点位管理 Point Management", "点位管理");
-    await expect(page.locator("select").filter({ hasText: "待派单" }).first()).toBeVisible();
+    await expect(page.getByPlaceholder("搜索点位编号 / 地址 / 项目")).toBeVisible();
+    await expect(page.locator(".pointToolbar")).toContainText("全部状态");
 
     await goPage(page, "素材管理 Media Center", "素材管理");
     const mediaOptions = await page.locator(".media-toolbar select").nth(2).locator("option").allTextContents();

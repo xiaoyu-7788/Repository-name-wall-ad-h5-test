@@ -327,6 +327,13 @@ a {
   min-width: 0;
 }
 
+.pointsHeaderActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .header-project {
   display: flex;
   align-items: center;
@@ -888,6 +895,144 @@ a {
   min-width: 260px;
 }
 
+.points-page {
+  display: grid;
+  gap: 16px;
+}
+
+.pointToolbar,
+.pointBatchBar,
+.pointTableWrap {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.pointToolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) repeat(4, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+  padding: 18px 20px;
+}
+
+.pointToolbar label {
+  display: grid;
+  gap: 7px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pointToolbarSearch {
+  min-width: 0;
+}
+
+.pointToolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pointBatchBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.pointBatchBar > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.pointBatchBar b {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.pointBatchBar span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pointBatchActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pointTableWrap {
+  overflow: hidden;
+}
+
+.pointTable {
+  min-width: 1220px;
+}
+
+.pointTable th,
+.pointTable td {
+  padding: 14px 12px;
+}
+
+.projectCell,
+.addressCell,
+.workerCell,
+.statusCell,
+.materialCell,
+.updateCell {
+  display: grid;
+  gap: 4px;
+}
+
+.projectCell strong,
+.addressCell strong,
+.workerCell strong,
+.materialCell strong,
+.updateCell strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.projectCell span,
+.addressCell span,
+.workerCell span,
+.materialCell span,
+.updateCell span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.statusCell {
+  min-width: 92px;
+}
+
+.materialCell strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 220px;
+}
+
+.rowActions button {
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+
+.pointsPagination {
+  margin-top: 0;
+}
+
 .points-final-page {
   display: grid;
   gap: 16px;
@@ -1281,7 +1426,18 @@ a {
   font-size: 12px;
 }
 
+.rowActions summary {
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+
 .row-actions details {
+  position: relative;
+}
+
+.rowActions details {
   position: relative;
 }
 
@@ -1289,7 +1445,15 @@ a {
   z-index: 5;
 }
 
+.rowActions details[open] {
+  z-index: 5;
+}
+
 .row-actions details[open] > :not(summary) {
+  display: block;
+}
+
+.rowActions details[open] > :not(summary) {
   display: block;
 }
 
@@ -1299,7 +1463,21 @@ a {
   margin-top: 6px;
 }
 
+.rowActions details button,
+.rowActions details small {
+  width: 180px;
+  margin-top: 6px;
+}
+
 .row-actions details small {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowActions details small {
   display: block;
   overflow: hidden;
   color: var(--muted);
@@ -4219,6 +4397,14 @@ button:hover,
     overflow-x: auto;
   }
 
+  .pointsHeaderActions {
+    width: 100%;
+  }
+
+  .pointToolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .kpi-grid,
   .health-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4302,10 +4488,25 @@ button:hover,
 
   .header-project,
   .header-search,
+  .pointsHeaderActions,
   .quick-action-strip,
   .toolbar-filters input,
   .map-toolbar input {
     min-width: 100%;
+  }
+
+  .pointToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .pointBatchBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pointToolbarActions,
+  .pointBatchActions {
+    justify-content: stretch;
   }
 
   .project-command-center {

@@ -2085,6 +2085,56 @@ npm run test:e2e
 - `npm run build` 通过。
 - `npm run test:e2e` 通过，11/11 passed。
 
+## 44. `/admin/points` 正式新版点位管理页面定稿
+
+更新时间：2026-05-12。
+
+本次只修复线上 `/admin/points` 的实际渲染页面，不改数据库结构、不改 Supabase schema、不改 `/api/wall-points` 的真实数据读写链路。
+
+路由与入口确认：
+
+- `index.html` 直接加载 `src/App.jsx`。
+- `src/App.jsx` 中 `/admin/points` 的真实页面入口仍然是 `src/pages/PointsPage.jsx`。
+- 点位表格实际由 `src/components/points/PointsTable.jsx` 渲染。
+- 顶部后台头部实际由 `src/components/layout/Header.jsx` 渲染，并在 points 页切换为专用 `Point Center` 文案。
+
+本次修改文件：
+
+- `src/pages/PointsPage.jsx`
+- `src/components/points/PointsTable.jsx`
+- `src/components/layout/Header.jsx`
+- `src/styles.css`
+- `tests/e2e/app.spec.js`
+- `TEST_REPORT.md`
+
+页面结构调整结果：
+
+- 顶部已改为 `管理后台 / Point Center` + `点位管理`。
+- 右侧已保留 `标签管理`、`批量导入`、`新增点位`。
+- 页面主体顺序已调整为 `header` -> `pointToolbar` -> `pointBatchBar` -> `pointTableWrap`。
+- `pointToolbar` 已包含：搜索框、`全部状态`、`异常筛选`、`批量打标签`、`批量移除标签`、`导入模板`。
+- `pointBatchBar` 未选中时显示 `点击任意点位行即可多选`，选中后显示 `已选 X 个点位`，并显示批量按钮。
+- `pointTableWrap` 表头已调整为：选择框、点位编号、项目 / 标签、地址、师傅 / 队伍、状态、素材情况、最近更新、操作。
+- 页面已不再渲染旧版点位页中的英文大标题、顶部大统计卡片和“点位筛选”大区域。
+
+数据链路确认：
+
+- 点位列表仍通过 `GET /api/wall-points` 读取真实数据。
+- 新增/编辑点位仍通过现有 `saveWallPoint()` -> `POST /api/wall-points` 保存。
+- 未改回本地静态假数据，也未破坏现有新增点位保存能力。
+
+本次验证命令：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，11 passed。
+
 ## 42. `/admin/points` 第二版新版界面升级
 
 更新时间：2026-05-12 15:41:14 +08:00。

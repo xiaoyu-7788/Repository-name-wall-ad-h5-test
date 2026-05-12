@@ -12,21 +12,29 @@ import {
   getScoutName,
   assignedWorkersForPoint,
   pointMaterialCompletion,
-  isPointReadyForAcceptance,
 } from "../../lib/domain";
 import { EmptyState } from "../shared/EmptyState";
 import { StatusPill } from "../shared/StatusBadge";
 
-function AcceptanceBadge({ ready }) {
-  return <span className={`status-badge ${ready ? "success" : "warning"}`}>{ready ? "可验收" : "待补齐"}</span>;
+function MaterialCell({ completion }) {
+  const missingText = completion.missing.length ? `缺${completion.missing.slice(0, 2).join("、")}` : "缺失项已补齐";
+  return (
+    <div className="materialCell">
+      <strong>{completion.completedCount}/{completion.requiredCount} · {completion.ratio}%</strong>
+      <span>{missingText}</span>
+    </div>
+  );
 }
 
-function MaterialCell({ completion }) {
+function WorkerCell({ point, assigned }) {
+  const currentWorker = point?.captain_name || point?.worker_name || point?.install_captain_name || assigned[0]?.name || "未派单";
+  const captainName = point?.install_captain_name || point?.captain_name || "未登记";
+  const scoutName = point?.scout_name || point?.wall_team_name || "未登记";
   return (
-    <div className="points-final-material">
-      <strong>{completion.completedCount}/{completion.requiredCount}</strong>
-      <span>{completion.status}</span>
-      <em>{completion.ratio}%</em>
+    <div className="workerCell">
+      <strong>{currentWorker}</strong>
+      <span>施工队长：{captainName}</span>
+      <span>找墙队伍：{scoutName}</span>
     </div>
   );
 }
@@ -50,7 +58,17 @@ export function PointsTable({
   workers = [],
 }) {
   function toggleAll(checked) {
-    setSelectedIds(checked ? points.map((point) => point.id) : []);
+    setSelectedIds((current) => {
+      if (!checked) {
+        return current.filter((id) => !points.some((point) => point.id === id));
+      }
+      const merged = new Set([...current, ...points.map((point) => point.id)]);
+      return [...merged];
+    });
+  }
+
+  function togglePoint(pointId) {
+    setSelectedIds((current) => current.includes(pointId) ? current.filter((id) => id !== pointId) : [...current, pointId]);
   }
 
   function toggleSort(key) {
@@ -61,117 +79,86 @@ export function PointsTable({
   }
 
   if (!points.length) {
-    return <EmptyState title="暂无点位" description="当前筛选结果为空，可继续调整筛选条件或新增点位。" />;
+    return <EmptyState title="暂无点位" description="当前筛选结果为空，可继续调整条件或新增点位。" />;
   }
 
-  return (
-    <section className="points-final-table-panel">
-      <div className="points-final-table-meta">
-        <div>
-          <h3>Point Management</h3>
-          <p>点位列表已直接连接真实数据库，所有查看、编辑和派单动作都保留现有业务链路。</p>
-        </div>
-        <div className="points-final-table-order">
-          <span>排序</span>
-          <b>{sort.key} / {sort.dir === "asc" ? "升序" : "降序"}</b>
-        </div>
-      </div>
+  const allChecked = points.length > 0 && points.every((point) => selectedIds.includes(point.id));
 
-      <div className="enterprise-table-wrap points-table points-final-table-wrap">
-        <table className="enterprise-table points-final-table">
+  return (
+    <section className="pointTableWrap">
+      <div className="enterprise-table-wrap points-table">
+        <table className="enterprise-table pointTable">
           <thead>
             <tr>
               <th className="checkbox-col">
-                <input type="checkbox" checked={points.length > 0 && points.every((point) => selectedIds.includes(point.id))} onChange={(event) => toggleAll(event.target.checked)} />
+                <input type="checkbox" checked={allChecked} onChange={(event) => toggleAll(event.target.checked)} aria-label="全选点位" />
               </th>
               <th><button type="button" onClick={() => toggleSort("title")}>点位编号</button></th>
-              <th><button type="button" onClick={() => toggleSort("project")}>项目</button></th>
+              <th><button type="button" onClick={() => toggleSort("project")}>项目 / 标签</button></th>
               <th>地址</th>
-              <th>K码</th>
+              <th>师傅 / 队伍</th>
               <th><button type="button" onClick={() => toggleSort("status")}>状态</button></th>
-              <th>房东</th>
-              <th>当前师傅</th>
-              <th>必传素材完成</th>
-              <th>缺什么素材</th>
-              <th>可验收</th>
-              <th>施工队长</th>
-              <th>找墙队伍</th>
-              <th><button type="button" onClick={() => toggleSort("updated")}>最近更新时间</button></th>
-              <th>异常状态</th>
-              <th>操作按钮</th>
+              <th>素材情况</th>
+              <th><button type="button" onClick={() => toggleSort("updated")}>最近更新</button></th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
             {points.map((point) => {
-              const anomalies = getPointAnomalies(point, photos, tasks, projects);
-              const assigned = assignedWorkersForPoint(point, tasks, workers);
-              const completion = pointMaterialCompletion(point, photos, projects);
-              const ready = isPointReadyForAcceptance(point, photos, projects);
               const selected = selectedIds.includes(point.id);
+              const assigned = assignedWorkersForPoint(point, tasks, workers);
+              const anomalies = getPointAnomalies(point, photos, tasks, projects);
+              const completion = pointMaterialCompletion(point, photos, projects);
+              const projectName = point?.project_name || point?.project || point?.project_id || getProjectName(point) || "未登记项目";
+              const tags = anomalies.length ? anomalies.slice(0, 2).join(" / ") : getPointStatus(point);
 
               return (
-                <tr key={point.id} className={selected ? "selected-row" : ""}>
-                  <td className="checkbox-col">
+                <tr
+                  key={point.id}
+                  className={selected ? "selected-row" : ""}
+                  onClick={() => togglePoint(point.id)}
+                >
+                  <td className="checkbox-col" onClick={(event) => event.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selected}
-                      onChange={() => setSelectedIds((current) => current.includes(point.id) ? current.filter((id) => id !== point.id) : [...current, point.id])}
+                      onChange={() => togglePoint(point.id)}
+                      aria-label={`选择点位 ${getPointCode(point)}`}
                     />
                   </td>
                   <td>
-                    <div className="points-final-code">
+                    <div className="projectCell">
                       <strong>{getPointCode(point)}</strong>
-                      <span>{point.id}</span>
+                      <span>{point.k_code || point.id || "未登记"}</span>
                     </div>
                   </td>
-                  <td><b>{getProjectName(point)}</b></td>
-                  <td className="wide-cell">
-                    <div className="points-final-address">
+                  <td>
+                    <div className="projectCell">
+                      <strong>{projectName}</strong>
+                      <span>{tags || "未登记标签"}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="addressCell">
                       <strong>{getPointAddress(point)}</strong>
+                      <span>{point.k_code || "K码未登记"}</span>
                     </div>
                   </td>
-                  <td>{point.k_code || "-"}</td>
-                  <td><StatusPill status={getPointStatus(point)} /></td>
+                  <td><WorkerCell point={point} assigned={assigned} /></td>
                   <td>
-                    <div className="points-final-person">
-                      <strong>{point.landlord_name || "-"}</strong>
-                      <span>{point.landlord_phone || "未登记手机号"}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="points-final-person">
-                      <strong>{assigned.length ? assigned.map((worker) => worker.name).join("、") : "未派单"}</strong>
-                      <span>{assigned.length ? `${assigned.length} 位师傅` : "等待派单"}</span>
+                    <div className="statusCell">
+                      <StatusPill status={getPointStatus(point)} />
                     </div>
                   </td>
                   <td><MaterialCell completion={completion} /></td>
                   <td>
-                    <div className="anomaly-chip-list material-missing-list">
-                      {completion.missing.length ? completion.missing.map((item) => <span key={item}>缺{item}</span>) : <span className="ok">已齐套</span>}
+                    <div className="updateCell">
+                      <strong>{cnTime(getPointUpdatedAt(point))}</strong>
+                      <span>{anomalies.length ? anomalies.join(" / ") : "无异常"}</span>
                     </div>
                   </td>
-                  <td><AcceptanceBadge ready={ready} /></td>
-                  <td>
-                    <div className="points-final-person">
-                      <strong>{getCaptainName(point)}</strong>
-                      <span>{point.captain_phone || point.install_captain_phone || "未登记手机号"}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="points-final-person">
-                      <strong>{getScoutName(point)}</strong>
-                      <span>{point.scout_phone || point.wall_team_phone || "未登记手机号"}</span>
-                    </div>
-                  </td>
-                  <td>{cnTime(getPointUpdatedAt(point))}</td>
-                  <td>
-                    <div className="anomaly-chip-list">
-                      {anomalies.length ? anomalies.slice(0, 3).map((item) => <span key={item}>{item}</span>) : <span className="ok">正常</span>}
-                      {anomalies.length > 3 && <span>+{anomalies.length - 3}</span>}
-                    </div>
-                  </td>
-                  <td>
-                    <div className="row-actions points-final-actions">
+                  <td onClick={(event) => event.stopPropagation()}>
+                    <div className="rowActions">
                       <button type="button" onClick={() => onView(point)}>查看</button>
                       <button type="button" onClick={() => onEdit(point)}>编辑</button>
                       <button type="button" onClick={() => onSite(point)}>现场查看</button>
@@ -186,8 +173,8 @@ export function PointsTable({
             })}
           </tbody>
         </table>
-        <div className="table-sort-hint">当前结果已按 {sort.key} {sort.dir === "asc" ? "升序" : "降序"} 排列</div>
       </div>
+      <div className="table-sort-hint">当前结果已按 {sort.key} {sort.dir === "asc" ? "升序" : "降序"} 排列</div>
     </section>
   );
 }
