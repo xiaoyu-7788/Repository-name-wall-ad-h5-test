@@ -762,6 +762,51 @@ npm run test:e2e
   - `ok: true`
   - `dataCount: 3`
   - 说明仍在读取真实线上数据。
+
+## 47. `/admin/points` 详情打开方式改为居中 Modal
+
+更新时间：2026-05-12。
+
+本次只继续修复 `/admin/points` 的详情打开方式和布局，不改 API，不改 Supabase，不改 `/api/wall-points` 的真实数据逻辑。
+
+删除/替换的旧 Drawer：
+
+- 被替换的旧详情容器：`src/components/points/PointDetailDrawer.jsx`
+- 旧实现依赖：`src/components/shared/Drawer.jsx`
+- 旧布局特征：
+  - `drawer-layer`
+  - `drawer-scrim`
+  - `drawer-panel`
+  - 固定右侧抽屉宽度
+  - 打开详情时出现右侧面板和整页遮罩
+
+本次处理方式：
+
+- `PointDetailDrawer.jsx` 不再使用 `Drawer`，改为使用居中的 `Modal`。
+- `/admin/points` 打开详情后只弹出中心 `modal-card`，不会把列表改成左右两栏。
+- 列表底层 `pointTableWrap` 在详情打开和关闭前后都保持可见和全宽。
+- 本次没有删除全局 `drawer-panel` CSS，因为仓库其它模块仍在复用；但 `/admin/points` 这条真实路径已经完全不再使用这套 Drawer。
+
+会导致半屏的旧 CSS 与现状：
+
+- 旧 Drawer 相关 CSS 位于 `src/styles.css`：
+  - `.drawer-layer`
+  - `.drawer-scrim`
+  - `.drawer-panel`
+- 这些样式本身会形成固定右侧抽屉。
+- 当前 points 页已不再命中这组类名；E2E 已新增断言，打开点位详情时 `.drawer-panel` 数量必须为 `0`。
+
+验证命令：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，11 passed。
 - 新增测试覆盖 `/api/dispatch` 写入“施工中”任务、更新点位状态，以及前端源码不再包含 Canvas 本地跳转派单关键字。
 
 线上排查建议：

@@ -13,7 +13,7 @@ import {
   pointMedia,
   pointTasks,
 } from "../../lib/domain";
-import { Drawer } from "../shared/Drawer";
+import { Modal } from "../shared/Modal";
 import { StatusPill } from "../shared/StatusBadge";
 
 export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEdit, onSite, projects = [] }) {
@@ -27,7 +27,7 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
   const ready = isPointReadyForAcceptance(point, photos, projects);
 
   return (
-    <Drawer title={mapped.code} subtitle={mapped.projectName} onClose={onClose} width="680px">
+    <Modal title={mapped.code} subtitle={mapped.projectName} onClose={onClose} wide>
       <div className="drawer-section pointDetailDrawer">
         <div className="pointDetailHead">
           <StatusPill status={getPointStatus(point)} />
@@ -84,6 +84,6 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
         <a href={amapMarkerUrl(point)} target="_blank" rel="noreferrer">高德查看</a>
         <a className="blue-button" href={amapNavigationUrl(point)} target="_blank" rel="noreferrer">高德导航</a>
       </div>
-    </Drawer>
+    </Modal>
   );
 }

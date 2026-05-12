@@ -134,10 +134,14 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     await page.getByLabel("关闭").click();
 
     await page.getByRole("button", { name: "查看详情", exact: true }).click();
-    await expect(page.locator(".drawer-panel")).toContainText("TEST-NO-K-001");
-    await expect(page.locator(".drawer-panel")).toContainText("K码");
-    await expect(page.locator(".drawer-panel")).toContainText("未登记");
-    await page.locator(".drawer-panel").getByLabel("关闭").click();
+    await expect(page.locator(".modal-card")).toContainText("TEST-NO-K-001");
+    await expect(page.locator(".modal-card")).toContainText("K码");
+    await expect(page.locator(".modal-card")).toContainText("未登记");
+    await expect(page.locator(".drawer-panel")).toHaveCount(0);
+    await expect(page.locator(".pointTableWrap")).toBeVisible();
+    await page.locator(".modal-card").getByLabel("关闭").click();
+    await expect(page.locator(".modal-card")).toHaveCount(0);
+    await expect(page.locator(".pointTableWrap")).toBeVisible();
   });
 
   test("派单中心可筛选、批量勾选、选择师傅并写入任务", async ({ page }) => {
