@@ -364,7 +364,7 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     expect(apiSource).toContain("import.meta.env.PROD");
     expect(apiSource).not.toMatch(/192[.]168[.]/);
     expect(apiSource).not.toMatch(/hostname[}]:8787/);
-    expect(apiSource).toContain('requestApi("/api/dispatch"');
+    expect(apiSource).toContain('requestApi("/api/dispatch?action=create"');
     expect(apiSource).toContain("isSupabaseDataMode");
     expect(supabaseSource).toContain("VITE_SUPABASE_URL");
     expect(supabaseSource).toContain("VITE_SUPABASE_ANON_KEY");

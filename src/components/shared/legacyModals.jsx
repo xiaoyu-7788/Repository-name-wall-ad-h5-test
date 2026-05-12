@@ -445,7 +445,7 @@ export function WorkerPage({ data, workerId }) {
   const [legacyLink, setLegacyLink] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
   const [taskDebug, setTaskDebug] = useState({
-    requestUrl: getApiRequestUrl(`/api/worker-tasks?workerId=${encodeURIComponent(workerId)}`),
+    requestUrl: getApiRequestUrl(`/api/workers?action=tasks&workerId=${encodeURIComponent(workerId)}`),
     lastFetchTime: "",
     count: 0,
     taskPointsLength: 0,
@@ -466,7 +466,7 @@ export function WorkerPage({ data, workerId }) {
   const swipeDirectionGuard = 1.35;
 
   async function fetchWorkerTasks() {
-    const requestPath = `/api/worker-tasks?workerId=${encodeURIComponent(workerId)}`;
+    const requestPath = `/api/workers?action=tasks&workerId=${encodeURIComponent(workerId)}`;
     const requestUrl = getApiRequestUrl(requestPath);
     setRemoteLoading(true);
     setTaskDebug((current) => ({ ...current, requestUrl }));

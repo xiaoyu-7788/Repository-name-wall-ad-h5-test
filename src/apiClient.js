@@ -639,13 +639,13 @@ async function requestApi(path, options = {}) {
 
 async function remoteState() {
   const [projects, workers, points, trackLogs] = await Promise.all([
-    requestApi("/api/projects"),
-    requestApi("/api/workers?includeDisabled=true"),
-    requestApi("/api/wall-points"),
-    requestApi("/api/track-logs"),
+    requestApi("/api/projects?action=list"),
+    requestApi("/api/workers?action=list&includeDisabled=true"),
+    requestApi("/api/wall-points?action=list"),
+    requestApi("/api/system?action=track-logs"),
   ]);
-  const media = await requestApi("/api/point-media").catch(() => []);
-  const tasks = await requestApi("/api/dispatch-tasks").catch(() => []);
+  const media = await requestApi("/api/media?action=list").catch(() => []);
+  const tasks = await requestApi("/api/dispatch?action=tasks").catch(() => []);
   return normalizeState({ projects, workers, wallPoints: points, dispatchTasks: tasks, pointMedia: media, trackLogs });
 }
 
@@ -689,7 +689,7 @@ export async function healthCheck() {
 export async function getProjects() {
   if (isLocalDataMode) return readLocalState().projects;
   if (isSupabaseDataMode) return (await supabaseState()).projects;
-  return requestApi("/api/projects");
+  return requestApi("/api/projects?action=list");
 }
 
 export async function saveProject(project) {
@@ -717,8 +717,8 @@ export async function saveProject(project) {
     if (error) throw supabaseError(error, "保存项目失败");
     return { ...data, materialRules: serializeMaybeJson(data.material_rules || []) };
   }
-  if (project.id) return requestApi(`/api/projects/${encodeURIComponent(project.id)}`, { method: "PUT", body: JSON.stringify(project) });
-  return requestApi("/api/projects", { method: "POST", body: JSON.stringify(project) });
+  if (project.id) return requestApi(`/api/projects?action=update&id=${encodeURIComponent(project.id)}`, { method: "PUT", body: JSON.stringify(project) });
+  return requestApi("/api/projects?action=create", { method: "POST", body: JSON.stringify(project) });
 }
 
 export async function deleteProject(projectId) {
@@ -732,7 +732,7 @@ export async function deleteProject(projectId) {
     if (error) throw supabaseError(error, "删除项目失败");
     return { id: projectId };
   }
-  return requestApi(`/api/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
+  return requestApi(`/api/projects?action=delete&id=${encodeURIComponent(projectId)}`, { method: "DELETE" });
 }
 
 function workersPath(options = {}) {
@@ -740,7 +740,7 @@ function workersPath(options = {}) {
   if (options.includeDisabled) params.set("includeDisabled", "true");
   if (options.enabledOnly) params.set("enabledOnly", "true");
   const query = params.toString();
-  return `/api/workers${query ? `?${query}` : ""}`;
+  return `/api/workers?action=list${query ? `&${query}` : ""}`;
 }
 
 function workerConflict(workers, draft, currentId = "") {
@@ -805,7 +805,7 @@ export async function getWorker(workerId) {
     if (!worker) throw new Error("链接无效或已过期，请联系管理员重新发送师傅链接。");
     return worker;
   }
-  return requestApi(`/api/workers/${encodeURIComponent(workerId)}`);
+  return requestApi(`/api/workers?action=detail&id=${encodeURIComponent(workerId)}`);
 }
 
 export async function saveWorker(worker) {
@@ -842,8 +842,8 @@ export async function saveWorker(worker) {
     if (error) throw supabaseError(error, "保存师傅失败");
     return normalizeSupabaseWorker(data);
   }
-  if (worker.id) return requestApi(`/api/workers/${encodeURIComponent(worker.id)}`, { method: "PUT", body: JSON.stringify(worker) });
-  return requestApi("/api/workers", { method: "POST", body: JSON.stringify(worker) });
+  if (worker.id) return requestApi(`/api/workers?action=update&id=${encodeURIComponent(worker.id)}`, { method: "PUT", body: JSON.stringify(worker) });
+  return requestApi("/api/workers?action=create", { method: "POST", body: JSON.stringify(worker) });
 }
 
 export async function deleteWorker(workerId) {
@@ -861,7 +861,7 @@ export async function deleteWorker(workerId) {
     if (error) throw supabaseError(error, "删除师傅失败");
     return { id: workerId, deleted: true };
   }
-  return requestApi(`/api/workers/${encodeURIComponent(workerId)}`, { method: "DELETE" });
+  return requestApi(`/api/workers?action=delete&id=${encodeURIComponent(workerId)}`, { method: "DELETE" });
 }
 
 export async function setWorkerEnabled(workerId, enabled) {
@@ -896,7 +896,7 @@ export async function setWorkerEnabled(workerId, enabled) {
     if (error) throw supabaseError(error, "更新师傅启用状态失败");
     return normalizeSupabaseWorker(data);
   }
-  return requestApi(`/api/workers/${encodeURIComponent(workerId)}/enable`, { method: "PATCH", body: JSON.stringify({ enabled }) });
+  return requestApi(`/api/workers?action=enable&id=${encodeURIComponent(workerId)}`, { method: "PATCH", body: JSON.stringify({ enabled }) });
 }
 
 export async function resetWorkerAccessToken(workerId) {
@@ -923,7 +923,7 @@ export async function resetWorkerAccessToken(workerId) {
     if (error) throw supabaseError(error, "重置师傅链接失败");
     return normalizeSupabaseWorker(data);
   }
-  return requestApi(`/api/workers/${encodeURIComponent(workerId)}/access-token`, { method: "PATCH" });
+  return requestApi(`/api/workers?action=access-token&id=${encodeURIComponent(workerId)}`, { method: "PATCH" });
 }
 
 export async function sendWorkerHeartbeat(workerId, payload = {}) {
@@ -983,7 +983,7 @@ export async function sendWorkerHeartbeat(workerId, payload = {}) {
     if (error) throw supabaseError(error, "更新师傅心跳失败");
     return normalizeSupabaseWorker(data);
   }
-  return requestApi(`/api/workers/${encodeURIComponent(workerId)}/heartbeat`, { method: "POST", body: JSON.stringify({ online: true, source: "worker-page", ...payload }) });
+  return requestApi(`/api/workers?action=heartbeat&id=${encodeURIComponent(workerId)}`, { method: "POST", body: JSON.stringify({ online: true, source: "worker-page", ...payload }) });
 }
 
 export async function markWorkerOffline(workerId) {
@@ -1019,7 +1019,7 @@ export async function markWorkerOffline(workerId) {
     if (error) throw supabaseError(error, "标记师傅离线失败");
     return normalizeSupabaseWorker(data);
   }
-  return requestApi(`/api/workers/${encodeURIComponent(workerId)}/offline`, { method: "POST", body: JSON.stringify({ source: "worker-page" }) });
+  return requestApi(`/api/workers?action=offline&id=${encodeURIComponent(workerId)}`, { method: "POST", body: JSON.stringify({ source: "worker-page" }) });
 }
 
 function normalizeLocationPayload(payload = {}) {
@@ -1136,13 +1136,13 @@ export async function saveWorkerLocation(payload) {
     return { worker: normalizeSupabaseWorker(updatedWorker), location: { id: trackLog.id, ...location } };
   }
 
-  return requestApi("/api/worker-location", { method: "POST", body: JSON.stringify(location) });
+  return requestApi("/api/workers?action=location", { method: "POST", body: JSON.stringify(location) });
 }
 
 export async function getWallPoints() {
   if (isLocalDataMode) return readLocalState().points;
   if (isSupabaseDataMode) return (await supabaseState()).points;
-  return requestApi("/api/points");
+  return requestApi("/api/wall-points?action=list");
 }
 
 export async function getPoints() {
@@ -1170,8 +1170,8 @@ export async function saveWallPoint(point) {
     if (error) throw supabaseError(error, "保存点位失败");
     return data;
   }
-  if (point.id) return requestApi(`/api/wall-points/${encodeURIComponent(point.id)}`, { method: "PUT", body: JSON.stringify(point) });
-  return requestApi("/api/wall-points", { method: "POST", body: JSON.stringify(point) });
+  if (point.id) return requestApi(`/api/wall-points?action=update&id=${encodeURIComponent(point.id)}`, { method: "PUT", body: JSON.stringify(point) });
+  return requestApi("/api/wall-points?action=create", { method: "POST", body: JSON.stringify(point) });
 }
 
 export async function deleteWallPoint(pointId) {
@@ -1190,7 +1190,7 @@ export async function deleteWallPoint(pointId) {
     if (error) throw supabaseError(error, "删除点位失败");
     return { id: pointId };
   }
-  return requestApi(`/api/wall-points/${encodeURIComponent(pointId)}`, { method: "DELETE" });
+  return requestApi(`/api/wall-points?action=delete&id=${encodeURIComponent(pointId)}`, { method: "DELETE" });
 }
 
 export async function dispatchPoints(workerIdOrPayload, pointIds = []) {
@@ -1257,7 +1257,7 @@ export async function dispatchPoints(workerIdOrPayload, pointIds = []) {
     }
     return { ok: true, workerId: worker.id, inserted: tasks.length, updated_points: selected.length, point_ids: selected };
   }
-  return requestApi("/api/dispatch", { method: "POST", body: JSON.stringify(payload) });
+  return requestApi("/api/dispatch?action=create", { method: "POST", body: JSON.stringify(payload) });
 }
 
 function normalizeWorkerTasksPayload(payload = {}, workerId = "") {
@@ -1331,7 +1331,7 @@ export async function getWorkerTasks(workerId) {
     if (pointError) throw supabaseError(pointError, "读取任务点位失败");
     return normalizeWorkerTasksPayload({ worker, workerId: worker.id, count: points.length, tasks, points, photos: (photos || []).map(normalizeSupabasePhoto), trackLogs: trackLogs || [] }, workerId);
   }
-  return normalizeWorkerTasksPayload(await requestApi(`/api/worker-tasks?workerId=${encodeURIComponent(workerId)}`), workerId);
+  return normalizeWorkerTasksPayload(await requestApi(`/api/workers?action=tasks&workerId=${encodeURIComponent(workerId)}`), workerId);
 }
 
 export async function uploadPointMedia(pointId, files, meta = {}) {
@@ -1398,7 +1398,7 @@ export async function uploadPointMedia(pointId, files, meta = {}) {
   Object.entries(meta).forEach(([key, value]) => {
     if (value != null) form.append(key, value);
   });
-  return requestApi(`/api/point-media/${encodeURIComponent(pointId)}`, { method: "POST", body: form });
+  return requestApi(`/api/media?action=upload&pointId=${encodeURIComponent(pointId)}`, { method: "POST", body: form });
 }
 
 export async function completePoint(pointId, payload = {}) {
@@ -1422,13 +1422,13 @@ export async function completePoint(pointId, payload = {}) {
     await supabase.from("dispatch_tasks").update({ status: "已完成", completed_at: completedAt }).eq("point_id", pointId);
     return { id: pointId, status: "已完成" };
   }
-  return requestApi("/api/complete-point", { method: "POST", body: JSON.stringify({ ...payload, pointId, point_id: pointId }) });
+  return requestApi(`/api/dispatch?action=complete&pointId=${encodeURIComponent(pointId)}`, { method: "POST", body: JSON.stringify({ ...payload, pointId, point_id: pointId }) });
 }
 
 export async function getTrackLogs() {
   if (isLocalDataMode) return readLocalState().trackLogs;
   if (isSupabaseDataMode) return (await supabaseMaybeSelect("track_logs")).sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
-  return requestApi("/api/track-logs");
+  return requestApi("/api/system?action=track-logs");
 }
 
 export async function saveTrackLog(log) {
@@ -1444,7 +1444,7 @@ export async function saveTrackLog(log) {
     if (error) throw supabaseError(error, "保存轨迹失败");
     return data;
   }
-  return requestApi("/api/track-logs", { method: "POST", body: JSON.stringify(log) });
+  return requestApi("/api/system?action=track-logs", { method: "POST", body: JSON.stringify(log) });
 }
 
 export async function importDemoData() {
@@ -1458,13 +1458,13 @@ export async function importDemoData() {
     await supabase.from("wall_points").upsert(demo.points.map(buildSupabasePointPayload), { onConflict: "id" });
     return supabaseState();
   }
-  return normalizeState(await requestApi("/api/import-demo", { method: "POST", body: JSON.stringify({}) }));
+  return normalizeState(await requestApi("/api/system?action=import-demo", { method: "POST", body: JSON.stringify({}) }));
 }
 
 export async function resetDemoData() {
   if (isLocalDataMode) return writeLocalState(createDemoState());
   if (isSupabaseDataMode) return importDemoData();
-  return normalizeState(await requestApi("/api/reset-demo", { method: "POST", body: JSON.stringify({}) }));
+  return normalizeState(await requestApi("/api/system?action=reset-demo", { method: "POST", body: JSON.stringify({}) }));
 }
 
 export const proxyApi = {
@@ -1522,7 +1522,7 @@ export const proxyApi = {
       writeLocalState({ ...state, photos: state.photos.map((photo) => photo.id === id ? { ...photo, kind } : photo) });
       return { id, kind };
     }
-    return requestApi(`/api/point-media/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ kind }) });
+    return requestApi(`/api/media?action=update&id=${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ kind }) });
   },
   saveTrackLog,
 };

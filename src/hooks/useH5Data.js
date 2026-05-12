@@ -168,18 +168,18 @@ export function useH5Data() {
       pointIds,
       point_ids: pointIds,
     };
-    setDispatchDebug({ path: "/api/dispatch", request: requestPayload });
+    setDispatchDebug({ path: "/api/dispatch?action=create", request: requestPayload });
     setLoading(true);
     try {
       const result = await dispatchPointsApi(requestPayload);
-      setDispatchDebug({ path: "/api/dispatch", request: requestPayload, response: result, status: 200 });
+      setDispatchDebug({ path: "/api/dispatch?action=create", request: requestPayload, response: result, status: 200 });
       setMessage(`已成功发送 ${pointIds.length} 个点位给 ${worker.name}`);
       await loadAll();
       return result;
     } catch (error) {
       const issue = classifyApiError(error);
       setDispatchDebug({
-        path: "/api/dispatch",
+        path: "/api/dispatch?action=create",
         request: requestPayload,
         status: error.status,
         response: error.data,
