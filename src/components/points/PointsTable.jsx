@@ -23,7 +23,7 @@ function AcceptanceBadge({ ready }) {
 
 function MaterialCell({ completion }) {
   return (
-    <div className="points-v2-material">
+    <div className="points-final-material">
       <strong>{completion.completedCount}/{completion.requiredCount}</strong>
       <span>{completion.status}</span>
       <em>{completion.ratio}%</em>
@@ -65,20 +65,20 @@ export function PointsTable({
   }
 
   return (
-    <section className="points-v2-table-shell">
-      <div className="points-v2-table-head">
+    <section className="points-final-table-panel">
+      <div className="points-final-table-meta">
         <div>
-          <h2>点位清单</h2>
-          <p>正式表格直接承接当前 Supabase 数据，支持派单、素材、验收和现场查看。</p>
+          <h3>Point Management</h3>
+          <p>点位列表已直接连接真实数据库，所有查看、编辑和派单动作都保留现有业务链路。</p>
         </div>
-        <div className="points-v2-sort">
+        <div className="points-final-table-order">
           <span>排序</span>
           <b>{sort.key} / {sort.dir === "asc" ? "升序" : "降序"}</b>
         </div>
       </div>
 
-      <div className="enterprise-table-wrap points-table points-v2-table-wrap">
-        <table className="enterprise-table points-v2-table">
+      <div className="enterprise-table-wrap points-table points-final-table-wrap">
+        <table className="enterprise-table points-final-table">
           <thead>
             <tr>
               <th className="checkbox-col">
@@ -119,31 +119,27 @@ export function PointsTable({
                     />
                   </td>
                   <td>
-                    <div className="points-v2-code-cell">
+                    <div className="points-final-code">
                       <strong>{getPointCode(point)}</strong>
                       <span>{point.id}</span>
                     </div>
                   </td>
-                  <td>
-                    <div className="points-v2-project-cell">
-                      <b>{getProjectName(point)}</b>
-                    </div>
-                  </td>
+                  <td><b>{getProjectName(point)}</b></td>
                   <td className="wide-cell">
-                    <div className="points-v2-address-cell">
+                    <div className="points-final-address">
                       <strong>{getPointAddress(point)}</strong>
                     </div>
                   </td>
                   <td>{point.k_code || "-"}</td>
                   <td><StatusPill status={getPointStatus(point)} /></td>
                   <td>
-                    <div className="points-v2-person-cell">
+                    <div className="points-final-person">
                       <strong>{point.landlord_name || "-"}</strong>
                       <span>{point.landlord_phone || "未登记手机号"}</span>
                     </div>
                   </td>
                   <td>
-                    <div className="points-v2-person-cell">
+                    <div className="points-final-person">
                       <strong>{assigned.length ? assigned.map((worker) => worker.name).join("、") : "未派单"}</strong>
                       <span>{assigned.length ? `${assigned.length} 位师傅` : "等待派单"}</span>
                     </div>
@@ -156,13 +152,13 @@ export function PointsTable({
                   </td>
                   <td><AcceptanceBadge ready={ready} /></td>
                   <td>
-                    <div className="points-v2-person-cell">
+                    <div className="points-final-person">
                       <strong>{getCaptainName(point)}</strong>
                       <span>{point.captain_phone || point.install_captain_phone || "未登记手机号"}</span>
                     </div>
                   </td>
                   <td>
-                    <div className="points-v2-person-cell">
+                    <div className="points-final-person">
                       <strong>{getScoutName(point)}</strong>
                       <span>{point.scout_phone || point.wall_team_phone || "未登记手机号"}</span>
                     </div>
@@ -175,7 +171,7 @@ export function PointsTable({
                     </div>
                   </td>
                   <td>
-                    <div className="row-actions points-v2-actions">
+                    <div className="row-actions points-final-actions">
                       <button type="button" onClick={() => onView(point)}>查看</button>
                       <button type="button" onClick={() => onEdit(point)}>编辑</button>
                       <button type="button" onClick={() => onSite(point)}>现场查看</button>

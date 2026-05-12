@@ -14,20 +14,20 @@ const ANOMALY_OPTIONS = [
 
 export function PointFilters({ projects, workers, filters, setFilters, tags, onNew, onBatch, onExport }) {
   return (
-    <section className="table-toolbar points-v2-toolbar">
-      <div className="points-v2-toolbar-main">
-        <div className="points-v2-toolbar-copy">
-          <h2>筛选与批量操作</h2>
-          <p>围绕项目、状态、异常、师傅和标签快速收敛点位范围。</p>
+    <section className="points-final-toolbar">
+      <div className="points-final-toolbar-top">
+        <div className="points-final-toolbar-title">
+          <h3>点位筛选</h3>
+          <p>按项目、状态、异常、师傅、标签和关键词快速缩小工作范围。</p>
         </div>
-        <div className="toolbar-actions points-v2-toolbar-actions">
+        <div className="points-final-toolbar-actions">
           <button className="blue-button" type="button" onClick={onNew}>新增点位</button>
           <button type="button" onClick={onBatch}>批量导入</button>
-          <button type="button" onClick={onExport}>导出数据</button>
+          <button type="button" onClick={onExport}>导出当前结果</button>
         </div>
       </div>
 
-      <div className="toolbar-filters points-v2-filter-grid">
+      <div className="points-final-filter-grid">
         <label>
           <span>项目</span>
           <select value={filters.project} onChange={(event) => setFilters((current) => ({ ...current, project: event.target.value, page: 1 }))}>
@@ -66,7 +66,7 @@ export function PointFilters({ projects, workers, filters, setFilters, tags, onN
             {["全部时间", "今天", "近7天", "本月"].map((item) => <option key={item}>{item}</option>)}
           </select>
         </label>
-        <label className="points-v2-search">
+        <label className="points-final-search">
           <span>搜索</span>
           <input value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value, page: 1 }))} placeholder="搜索编号、地址、K码、房东、队伍" />
         </label>

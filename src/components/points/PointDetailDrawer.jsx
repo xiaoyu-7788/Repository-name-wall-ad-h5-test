@@ -37,13 +37,13 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
 
   return (
     <Drawer title={getPointCode(point)} subtitle={getPointAddress(point)} onClose={onClose} width="640px">
-      <div className="drawer-section points-v2-drawer-section">
-        <div className="points-v2-drawer-headline">
+      <div className="drawer-section points-final-drawer">
+        <div className="points-final-drawer-head">
           <StatusPill status={getPointStatus(point)} />
           <span>{getProjectName(point)}</span>
           <b>{ready ? "可验收" : "待补齐"}</b>
         </div>
-        <div className="detail-grid single points-v2-detail-grid">
+        <div className="detail-grid single points-final-detail-grid">
           <div><span>K码</span><b>{point.k_code || "-"}</b></div>
           <div><span>房东</span><b>{point.landlord_name || "-"} / {point.landlord_phone || "未登记"}</b></div>
           <div><span>施工队长</span><b>{getCaptainName(point)} / {getCaptainPhone(point)}</b></div>
@@ -56,9 +56,9 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
         </div>
       </div>
 
-      <div className="drawer-section points-v2-drawer-section">
+      <div className="drawer-section points-final-drawer">
         <h3>素材概览</h3>
-        <div className="media-count-strip points-v2-media-strip">
+        <div className="media-count-strip points-final-media-strip">
           <span>现场照片 {counts.site}</span>
           <span>720 全景 {counts.pano}</span>
           <span>视频 {counts.video}</span>
@@ -76,7 +76,7 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
         </div>
       </div>
 
-      <div className="drawer-section points-v2-drawer-section">
+      <div className="drawer-section points-final-drawer">
         <h3>派单记录</h3>
         <div className="record-list">
           {records.map((task) => {
@@ -87,7 +87,7 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
         </div>
       </div>
 
-      <div className="drawer-actions points-v2-drawer-actions">
+      <div className="drawer-actions points-final-drawer-actions">
         <button type="button" onClick={() => onSite(point)}>现场查看</button>
         <button type="button" onClick={() => onEdit(point)}>编辑点位</button>
         <a href={amapMarkerUrl(point)} target="_blank" rel="noreferrer">高德查看</a>

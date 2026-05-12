@@ -2059,6 +2059,32 @@ https://repository-name-wall-ad-h5-test.vercel.app/api/wall-points
 ```
 
 预期：先返回空数组或已有点位；在前端新增 `TEST-001` 后，再访问该接口应能在 `data` 数组中看到 `TEST-001`。
+## 43. `/admin/points` 最终新版界面替换
+
+更新时间：2026-05-12 16:18:13 +08:00。
+
+本次将 `/admin/points` 从过渡版结构替换为最终确认版点位管理界面，保留现有 Supabase 真实数据读写。
+
+完成内容：
+
+- `/admin/points` 真实入口仍为 [src/App.jsx](/C:/Users/wangs/Desktop/wall_ad_h5_test/src/App.jsx:192) -> [src/pages/PointsPage.jsx](/C:/Users/wangs/Desktop/wall_ad_h5_test/src/pages/PointsPage.jsx)。
+- 已确认项目内不存在第二个实际生效的 `PointsPage` 或 `PointManagement` 页面与之并行引用。
+- 过渡版页面中的“执行台账中心”“筛选与批量操作”“点位清单”等结构和文案已从 `/admin/points` 真实入口移除。
+- 点位管理页保留真实 Supabase 数据读取、新增点位保存、点位表格真实展示、详情抽屉、派单、素材、验收、删除等现有行为。
+- 前端字段 fallback 继续兼容 `point_code/title/name`、`detail_address/address`、`longitude/lng`、`latitude/lat`、`captain_* / install_captain_*`、`scout_* / wall_team_*`。
+
+已执行验证：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build` 通过。
+- `npm run test:e2e` 通过，11/11 passed。
+
 ## 42. `/admin/points` 第二版新版界面升级
 
 更新时间：2026-05-12 15:41:14 +08:00。

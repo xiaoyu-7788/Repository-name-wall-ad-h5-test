@@ -68,7 +68,8 @@ export function PointsPage({
   const filtered = useMemo(() => {
     const keyword = filters.search.trim().toLowerCase();
     const base = data.points.filter((point) => {
-      const projectOk = filters.project === "all" || point?.project_name === filters.project || point?.projectName === filters.project;
+      const projectName = point?.project_name || point?.projectName || "";
+      const projectOk = filters.project === "all" || projectName === filters.project;
       const statusOk = filters.status === "全部" || getPointStatus(point) === filters.status;
       const anomalies = getPointAnomalies(point, data.photos, data.tasks, data.projects);
       const anomalyOk = filters.anomaly === "全部异常" || anomalies.includes(filters.anomaly);
@@ -88,7 +89,7 @@ export function PointsPage({
         point?.scout_name,
         point?.scout_phone,
         point?.k_code,
-        point?.project_name,
+        projectName,
         assignedWorkers,
         anomalies.join(" "),
       ].join(" ").toLowerCase();
@@ -136,18 +137,18 @@ export function PointsPage({
   }
 
   return (
-    <div className="points-page points-v2-page">
-      <section className="points-v2-hero">
-        <div className="points-v2-title">
-          <span className="points-v2-kicker">Point Management</span>
-          <h2>执行台账中心</h2>
-          <p>面向全国墙体广告执行的真实业务台账，持续连接 Supabase 正式数据，不回退演示模式。</p>
+    <div className="points-page points-final-page">
+      <section className="points-final-header">
+        <div className="points-final-heading">
+          <span className="points-final-kicker">Point Management</span>
+          <h2>Point Management</h2>
+          <p>围绕真实 Supabase 点位数据做筛选、派单、素材核查和验收流转，界面结构对齐正式管理后台。</p>
         </div>
-        <div className="points-v2-metrics">
+        <div className="points-final-metrics">
           <article>
-            <span>当前点位</span>
+            <span>点位总数</span>
             <strong>{filtered.length}</strong>
-            <small>符合筛选条件的真实数据</small>
+            <small>当前筛选结果</small>
           </article>
           <article>
             <span>已派师傅</span>
@@ -155,14 +156,19 @@ export function PointsPage({
             <small>已有派单记录</small>
           </article>
           <article>
-            <span>素材齐套</span>
-            <strong>{scopedComplete}</strong>
-            <small>按项目规则判断</small>
+            <span>待处理异常</span>
+            <strong>{scopedAnomalies}</strong>
+            <small>缺素材或待补齐</small>
           </article>
           <article>
             <span>可验收</span>
             <strong>{scopedReady}</strong>
-            <small>可直接进入验收查看</small>
+            <small>素材齐套可验收</small>
+          </article>
+          <article>
+            <span>素材齐套</span>
+            <strong>{scopedComplete}</strong>
+            <small>按项目规则判断</small>
           </article>
         </div>
       </section>
@@ -178,27 +184,8 @@ export function PointsPage({
         onExport={exportData}
       />
 
-      <section className="points-v2-summary">
-        <div>
-          <span>当前项目</span>
-          <b>{activeProject === "all" ? "全部项目" : activeProject}</b>
-        </div>
-        <div>
-          <span>时间范围</span>
-          <b>{filters.timeRange}</b>
-        </div>
-        <div>
-          <span>异常点位</span>
-          <b>{scopedAnomalies}</b>
-        </div>
-        <div>
-          <span>当前页首条</span>
-          <b>{pagePoints[0] ? getPointCode(pagePoints[0]) : "暂无数据"}</b>
-        </div>
-      </section>
-
       {bulkCounts > 0 && (
-        <section className="bulk-bar points-v2-bulk-bar">
+        <section className="bulk-bar points-final-bulk">
           <b>已选择 {bulkCounts} 个点位</b>
           <div>
             <button type="button" onClick={() => onDispatchPoint(null)}>批量派单</button>
@@ -229,7 +216,7 @@ export function PointsPage({
         workers={data.workers}
       />
 
-      <footer className="table-pagination points-v2-pagination">
+      <footer className="table-pagination points-final-pagination">
         <span>共 {filtered.length} 条，当前第 {page}/{totalPages} 页</span>
         <select value={filters.pageSize} onChange={(event) => setFilters((current) => ({ ...current, pageSize: Number(event.target.value), page: 1 }))}>
           {[10, 20, 50].map((size) => <option key={size} value={size}>每页 {size} 条</option>)}
