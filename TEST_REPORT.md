@@ -610,6 +610,29 @@ npm run test:e2e
 - `npm run build`：通过。
 - `npm run test:e2e`：通过，11 passed。
 
+线上 `/admin/points` 实测结果：
+
+- 初始进入页面时：
+  - `pointTableWrap = 1`
+  - `modal-card = 0`
+  - `drawer-panel = 0`
+  - 说明默认是全宽列表，没有右侧旧 Drawer。
+- 点击首行 `查看详情` 后：
+  - `modal-card = 1`
+  - `drawer-panel = 0`
+  - `pointTableWrap = 1`
+  - 说明详情已改为居中 Modal，底层列表宽度没有变化。
+- 关闭详情后：
+  - `modal-card = 0`
+  - `drawer-panel = 0`
+  - `pointTableWrap = 1`
+  - 说明关闭后仍回到完整全宽列表，没有残留右侧半屏结构。
+- 同时确认：
+  - 操作列仍是 `查看详情 / 编辑 / 更多`
+  - 地址第二行仍显示 `K码：...`
+  - 线上不存在旧版 `Point Management`
+  - `/api/wall-points` 返回 `ok: true`，`dataCount: 3`
+
 ## 45. `/admin/points` 完整新版点位管理中心替换
 
 更新时间：2026-05-12。
