@@ -59,6 +59,13 @@ export function PointsTable({
     }));
   }
 
+  function runMenuAction(event, callback) {
+    event.stopPropagation();
+    callback();
+    const details = event.currentTarget.closest("details");
+    if (details) details.open = false;
+  }
+
   if (!points.length) {
     return <EmptyState title="暂无点位" description="当前筛选结果为空，可继续调整条件或新增点位。" />;
   }
@@ -105,7 +112,6 @@ export function PointsTable({
                   <td>
                     <div className="pointCodeCell">
                       <strong>{mapped.code}</strong>
-                      <span>ID：{point.id}</span>
                     </div>
                   </td>
                   <td>
@@ -141,13 +147,18 @@ export function PointsTable({
                   </td>
                   <td onClick={(event) => event.stopPropagation()}>
                     <div className="rowActions">
-                      <button type="button" onClick={() => onView(point)}>查看</button>
+                      <button type="button" onClick={() => onView(point)}>查看详情</button>
                       <button type="button" onClick={() => onEdit(point)}>编辑</button>
-                      <button type="button" onClick={() => onSite(point)}>现场查看</button>
-                      <button type="button" onClick={() => onDispatch(point)}>派单</button>
-                      <button type="button" onClick={() => onMedia(point)}>素材</button>
-                      <button type="button" onClick={() => onAcceptance(point)}>验收</button>
-                      <button type="button" className="danger-text" onClick={() => onDelete(point)}>删除</button>
+                      <details className="pointActionMenu">
+                        <summary>更多</summary>
+                        <div className="pointActionList">
+                          <button type="button" onClick={(event) => runMenuAction(event, () => onSite(point))}>现场查看</button>
+                          <button type="button" onClick={(event) => runMenuAction(event, () => onDispatch(point))}>派单</button>
+                          <button type="button" onClick={(event) => runMenuAction(event, () => onMedia(point))}>素材</button>
+                          <button type="button" onClick={(event) => runMenuAction(event, () => onAcceptance(point))}>验收</button>
+                          <button type="button" className="danger-text" onClick={(event) => runMenuAction(event, () => onDelete(point))}>删除</button>
+                        </div>
+                      </details>
                     </div>
                   </td>
                 </tr>

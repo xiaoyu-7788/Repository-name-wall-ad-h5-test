@@ -680,6 +680,68 @@ npm run test:e2e
   - 表头显示 `地址 / K码`
   - 页面已不再显示 `执行台账中心` 或旧版 `Point Management`
   - 详情抽屉中 `K码` 字段显示为 `未登记`，未再重复点位编号
+
+## 46. `/admin/points` 操作列与表格宽度收口
+
+更新时间：2026-05-12。
+
+本次只继续修复 `/admin/points` 的点位列表操作区和表格宽度，不改 API、Supabase 数据读写和字段名。
+
+修改文件：
+
+- `src/components/points/PointsTable.jsx`
+- `src/styles.css`
+- `tests/e2e/app.spec.js`
+- `TEST_REPORT.md`
+
+旧按钮组替换位置：
+
+- 旧的行内按钮组原来在 `src/components/points/PointsTable.jsx` 的 `rowActions` 内直接渲染：
+  - 查看
+  - 编辑
+  - 现场查看
+  - 派单
+  - 素材
+  - 验收
+  - 删除
+- 现已替换为新版结构：
+  - 主按钮：`查看详情`
+  - 次按钮：`编辑`
+  - 菜单按钮：`更多`
+- `更多` 菜单中保留：
+  - `现场查看`
+  - `派单`
+  - `素材`
+  - `验收`
+  - `删除`
+- `删除` 仅保留在菜单内，并继续使用危险样式。
+
+本次样式收口：
+
+- `pointTableWrap` 改为全宽显示。
+- `pointTable` 改为 `width: 100%`，不再维持旧按钮组撑开的宽度。
+- `更多` 菜单改为绝对定位下拉，不再把表格行撑高。
+- 列表常态保持全宽；详情仍通过 Drawer 打开，不会把表格常态挤成半屏。
+
+验证命令：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，11 passed。
+
+线上 `/admin/points` 实际验证项：
+
+- 行内操作区只显示：`查看详情`、`编辑`、`更多`
+- `更多` 菜单中才显示：`现场查看`、`派单`、`素材`、`验收`、`删除`
+- 地址列第二行继续显示 `K码：...`
+- 页面保持全宽表格显示
+- `/api/wall-points` 继续返回真实数据
 - 新增测试覆盖 `/api/dispatch` 写入“施工中”任务、更新点位状态，以及前端源码不再包含 Canvas 本地跳转派单关键字。
 
 线上排查建议：

@@ -95,12 +95,28 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     await expect(page.locator(".pointTableWrap .enterprise-table tbody tr")).toHaveCount(3);
     await expect(page.locator(".pointTableWrap")).toContainText("GZ-BY-001");
     await expect(page.locator(".pointTableWrap")).toContainText("K码：K-GZ-BY-001");
+    await expect(page.getByRole("button", { name: "查看详情", exact: true })).toHaveCount(3);
+    await expect(page.getByRole("button", { name: "编辑", exact: true })).toHaveCount(3);
+    await expect(page.locator(".pointActionMenu summary")).toHaveCount(3);
+    await expect(page.getByRole("button", { name: "现场查看", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "派单", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "素材", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "验收", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "删除", exact: true })).toHaveCount(0);
     await expect(page.locator("body")).not.toContainText("执行台账中心");
 
     await page.getByPlaceholder("搜索点位编号 / 地址 / 项目 / 师傅").fill("GZ-BY-001");
     await expect(page.locator(".pointTableWrap .enterprise-table tbody tr")).toHaveCount(1);
     await expect(page.locator(".pointTableWrap")).toContainText("GZ-BY-001");
     await page.getByPlaceholder("搜索点位编号 / 地址 / 项目 / 师傅").fill("");
+
+    await page.locator(".pointActionMenu summary").first().click();
+    await expect(page.getByRole("button", { name: "现场查看", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "派单", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "素材", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "验收", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "删除", exact: true })).toHaveCount(1);
+    await page.locator(".pointActionMenu summary").first().click();
 
     await page.getByRole("button", { name: "新增点位", exact: true }).click();
     await expect(page.getByRole("dialog")).toContainText("点位编辑 / 上传");
@@ -117,7 +133,7 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     await expect(page.getByRole("dialog")).toContainText("批量新增点位");
     await page.getByLabel("关闭").click();
 
-    await page.getByRole("button", { name: "查看", exact: true }).click();
+    await page.getByRole("button", { name: "查看详情", exact: true }).click();
     await expect(page.locator(".drawer-panel")).toContainText("TEST-NO-K-001");
     await expect(page.locator(".drawer-panel")).toContainText("K码");
     await expect(page.locator(".drawer-panel")).toContainText("未登记");
