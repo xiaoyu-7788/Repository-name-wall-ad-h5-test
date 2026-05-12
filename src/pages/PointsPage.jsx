@@ -141,7 +141,7 @@ export function PointsPage({
         filters={filters}
         setFilters={updateProjectFilter}
         tags={tags}
-        onNew={() => onNewPoint({ id: uid("point"), title: "", status: "待派单", project_name: activeProject === "all" ? projects.find((item) => item.id !== "all")?.name || "加多宝项目" : activeProject })}
+        onNew={() => onNewPoint({ __isNew: true, id: uid("point"), title: "", status: "待派单", project_name: activeProject === "all" ? projects.find((item) => item.id !== "all")?.name || "加多宝项目" : activeProject })}
         onBatch={onBatchImport}
         onExport={exportData}
       />

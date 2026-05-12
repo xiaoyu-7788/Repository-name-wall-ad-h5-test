@@ -125,6 +125,7 @@ export function useH5Data() {
     } catch (error) {
       const issue = classifyApiError(error);
       setMessage(`新增点位失败：${issue.category}，${issue.detail}`);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -139,6 +140,7 @@ export function useH5Data() {
     } catch (error) {
       const issue = classifyApiError(error);
       setMessage(`保存点位失败：${issue.category}，${issue.detail}`);
+      throw error;
     } finally {
       setLoading(false);
     }

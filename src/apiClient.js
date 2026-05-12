@@ -641,7 +641,7 @@ async function remoteState() {
   const [projects, workers, points, trackLogs] = await Promise.all([
     requestApi("/api/projects?action=list"),
     requestApi("/api/workers?action=list&includeDisabled=true"),
-    requestApi("/api/wall-points?action=list"),
+    requestApi("/api/wall-points"),
     requestApi("/api/system?action=track-logs"),
   ]);
   const media = await requestApi("/api/media?action=list").catch(() => []);
@@ -1141,8 +1141,7 @@ export async function saveWorkerLocation(payload) {
 
 export async function getWallPoints() {
   if (isLocalDataMode) return readLocalState().points;
-  if (isSupabaseDataMode) return (await supabaseState()).points;
-  return requestApi("/api/wall-points?action=list");
+  return requestApi("/api/wall-points");
 }
 
 export async function getPoints() {
@@ -1152,26 +1151,25 @@ export async function getPoints() {
 export async function saveWallPoint(point) {
   if (isLocalDataMode) {
     const state = readLocalState();
+    const localPoint = { ...point };
+    delete localPoint.__isNew;
     const next = {
-      id: point.id || uid("point"),
-      title: point.title || point.k_code || "新点位",
-      status: normalizePointStatus(point.status),
-      created_at: point.created_at || nowIso(),
-      ...point,
-      status: normalizePointStatus(point.status),
+      id: localPoint.id || uid("point"),
+      title: localPoint.title || localPoint.k_code || "新点位",
+      status: normalizePointStatus(localPoint.status),
+      created_at: localPoint.created_at || nowIso(),
+      ...localPoint,
+      status: normalizePointStatus(localPoint.status),
       updated_at: nowIso(),
     };
     writeLocalState({ ...state, points: [next, ...state.points.filter((item) => item.id !== next.id)] });
     return next;
   }
-  if (isSupabaseDataMode) {
-    const payload = buildSupabasePointPayload(point);
-    const { data, error } = await supabase.from("wall_points").upsert(payload, { onConflict: "id" }).select("*").single();
-    if (error) throw supabaseError(error, "保存点位失败");
-    return data;
-  }
-  if (point.id) return requestApi(`/api/wall-points?action=update&id=${encodeURIComponent(point.id)}`, { method: "PUT", body: JSON.stringify(point) });
-  return requestApi("/api/wall-points?action=create", { method: "POST", body: JSON.stringify(point) });
+  const payload = { ...point };
+  const isNewPoint = Boolean(payload.__isNew) || !payload.id;
+  delete payload.__isNew;
+  if (isNewPoint) return requestApi("/api/wall-points", { method: "POST", body: JSON.stringify(payload) });
+  return requestApi(`/api/wall-points?action=update&id=${encodeURIComponent(payload.id)}`, { method: "PUT", body: JSON.stringify(payload) });
 }
 
 export async function deleteWallPoint(pointId) {
@@ -1473,7 +1471,6 @@ export const proxyApi = {
   },
   async loadState() {
     if (isLocalDataMode) return readLocalState();
-    if (isSupabaseDataMode) return supabaseState();
     return remoteState();
   },
   async loadDemoState() {

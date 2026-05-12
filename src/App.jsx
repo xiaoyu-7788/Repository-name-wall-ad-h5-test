@@ -140,7 +140,7 @@ function AdminWorkspace({ data, initialPage = "dashboard" }) {
   function handleQuickAction(action) {
     if (action === "new-point") {
       const defaultProject = activeProject === "all" ? projects.find((item) => item.id !== "all")?.name || "加多宝项目" : activeProject;
-      setEditPoint({ id: uid("point"), title: "", status: "待派单", project_name: defaultProject });
+      setEditPoint({ __isNew: true, id: uid("point"), title: "", status: "待派单", project_name: defaultProject });
       navigate("points");
       return;
     }

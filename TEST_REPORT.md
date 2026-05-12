@@ -1989,3 +1989,37 @@ npm run test:api
 补充 API 回归结果：
 - `npm run test:api` 通过。
 - 已确认 `/api/health`、`/api/dispatch`、`/api/worker-tasks/w1`、`/api/point-media/:pointId`、`/api/worker-location`、`/api/debug-state`、`/api/complete-point/:pointId` 等旧链路仍可用。
+## 40. 新增点位真实写入 Supabase 修复
+
+更新时间：2026-05-12 12:50:41 +08:00。
+
+本次只处理线上“点位管理新增点位后 `/api/wall-points` 仍为空”的问题，不新增业务功能、不调整 UI。
+
+修复内容：
+
+- `api/wall-points.js` 保持单个 Vercel Serverless Function，支持 `GET /api/wall-points` 从 Supabase `wall_points` 读取数据。
+- `api/wall-points.js` 支持 `POST /api/wall-points` 写入新增点位，并返回 `{ ok: true, data: 新增点位 }`。
+- API 层新增字段白名单映射：`point_code/title` 写入 `title`，`install_captain_*` 写入 `captain_*`，`wall_team_*` 写入 `scout_*`，避免前端表单字段直接污染数据库列。
+- 前端新增点位标记 `__isNew`，保存时明确走 `POST /api/wall-points`；已有点位编辑继续走 `PUT /api/wall-points?action=update&id=...`。
+- 点位列表加载改为同源 `GET /api/wall-points`，不再在 Supabase 模式下绕过 Vercel API 直连浏览器 Supabase。
+- `新增点位` 和 `保存点位` 失败时会继续抛错，避免 API 写入失败时弹窗关闭并造成“假成功”。
+
+已执行验证命令：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build` 通过；仅保留 Vite chunk 体积 warning，不影响部署。
+- `npm run test:e2e` 通过，11/11 passed。
+
+线上人工复查路径：
+
+```text
+https://repository-name-wall-ad-h5-test.vercel.app/api/wall-points
+```
+
+预期：先返回空数组或已有点位；在前端新增 `TEST-001` 后，再访问该接口应能在 `data` 数组中看到 `TEST-001`。
