@@ -609,6 +609,71 @@ npm run test:e2e
 
 - `npm run build`：通过。
 - `npm run test:e2e`：通过，11 passed。
+
+## 45. `/admin/points` 完整新版点位管理中心替换
+
+更新时间：2026-05-12。
+
+本次继续修复 `/admin/points`，目标是把半新版页面替换为完整新版点位管理中心，并修正地址 / K码显示错误。
+
+实际入口确认：
+
+- `/admin/points` 真实路由仍在 `src/App.jsx`，实际渲染组件仍然只有 `src/pages/PointsPage.jsx`。
+- `src/components/points/PointFilters.jsx` 当前未再被 `/admin/points` 引用。
+- 当前点位页只组合使用 `PointsPage` + `PointsTable` + `PointDetailDrawer`，不存在第二个 `PointManagement` 页面与之并行渲染。
+
+本次新增或调整：
+
+- 在 `src/lib/domain.js` 中统一新增点位展示字段映射：
+  - `getPointKCode()`
+  - `getProjectName(point, projects)`
+  - `getPointDisplayModel()`
+- `PointsPage` 恢复完整新版筛选工具栏：
+  - 搜索点位编号 / 地址 / 项目 / 师傅
+  - 项目筛选
+  - 状态筛选
+  - 异常筛选
+  - 师傅筛选
+  - 标签筛选
+  - 时间筛选
+  - 批量打标签
+  - 批量移除标签
+  - 导入模板
+- `PointsTable` 调整为最终表头：
+  - 选择框
+  - 点位编号
+  - 项目 / 标签
+  - 地址 / K码
+  - 师傅 / 队伍
+  - 状态
+  - 素材情况
+  - 最近更新
+  - 操作
+- 地址列下方统一显示 `K码：xxx`，不再重复显示点位编号。
+- `PointDetailDrawer` 改为使用统一字段映射，抽屉里的 K码 不再从点位编号兜底。
+- `api/wall-points.js` 修复旧兜底逻辑：保存点位时，`k_code` 为空不再自动写入 `title`。
+- `legacyModals.jsx` 中批量导入预处理同步修复，避免批量导入时把点位编号写成 K码。
+
+本次修改文件：
+
+- `src/pages/PointsPage.jsx`
+- `src/components/points/PointsTable.jsx`
+- `src/components/points/PointDetailDrawer.jsx`
+- `src/components/shared/legacyModals.jsx`
+- `src/lib/domain.js`
+- `src/styles.css`
+- `api/wall-points.js`
+- `tests/e2e/app.spec.js`
+- `TEST_REPORT.md`
+
+自检结果：
+
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，11 passed。
+- E2E 已新增断言：
+  - 表格表头显示 `地址 / K码`
+  - 现有演示点位显示 `K码：K-GZ-BY-001`
+  - 新增一个未填写 K码 的点位后，表格显示 `未登记地址` 和 `K码：未登记`
 - 新增测试覆盖 `/api/dispatch` 写入“施工中”任务、更新点位状态，以及前端源码不再包含 Canvas 本地跳转派单关键字。
 
 线上排查建议：

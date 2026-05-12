@@ -23,6 +23,8 @@ import {
   cnTime,
   getCaptainName,
   getCaptainPhone,
+  getPointAddress,
+  getPointKCode,
   getPointStatus,
   getProjectName,
   getScoutName,
@@ -128,7 +130,7 @@ export function BatchImportModal({ projects, onClose, onImport }) {
       id: uid("point"),
       title,
       address: row["地址"] || row.address || "",
-      k_code: row["K码"] || row.k_code || title,
+      k_code: row["K码"] || row.k_code || "",
       landlord_name: row["房东"] || row.landlord_name || "",
       landlord_phone: row["房东手机号"] || row.landlord_phone || row["手机号"] || "",
       captain_name: row["施工队长"] || row.captain_name || "",
@@ -173,7 +175,7 @@ export function BatchImportModal({ projects, onClose, onImport }) {
 
   function kimiClean() {
     const next = preview.length ? preview : parseText();
-    setPreview(next.map((point) => ({ ...point, k_code: point.k_code || point.title, status: "待派单" })));
+    setPreview(next.map((point) => ({ ...point, k_code: point.k_code || "", status: "待派单" })));
   }
 
   function amapMatch() {
@@ -210,7 +212,7 @@ export function BatchImportModal({ projects, onClose, onImport }) {
             <article key={point.id}>
               <b>{point.title}</b>
               <span>{point.address}</span>
-              <small>K码 {point.k_code} · 房东 {point.landlord_name} · 队长 {point.captain_name} · 找墙 {point.scout_name}</small>
+              <small>K码 {getPointKCode(point)} · 房东 {point.landlord_name} · 队长 {point.captain_name} · 找墙 {point.scout_name}</small>
               <small>{point.project_name} · {point.lng || "待匹配"}, {point.lat || "待匹配"}</small>
             </article>
           ))}
@@ -292,8 +294,8 @@ export function SiteViewerModal({ point, photos, onClose, onEdit }) {
         <aside className="site-info">
           <h3>现场信息</h3>
           <div className="detail-grid single">
-            <div><span>地址</span><b>{point.address}</b></div>
-            <div><span>K码</span><b>{point.k_code || "未登记"}</b></div>
+            <div><span>地址</span><b>{getPointAddress(point)}</b></div>
+            <div><span>K码</span><b>{getPointKCode(point)}</b></div>
             <div><span>项目</span><b>{getProjectName(point)}</b></div>
             <div><span>状态</span><b>{getPointStatus(point)}</b></div>
             <div><span>房东</span><b>{point.landlord_name || "未登记"} / {point.landlord_phone || "未登记"}</b></div>

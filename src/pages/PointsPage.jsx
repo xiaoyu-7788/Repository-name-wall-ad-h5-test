@@ -8,7 +8,10 @@ import {
   getPointAddress,
   getPointAnomalies,
   getPointCode,
+  getPointDisplayModel,
+  getPointKCode,
   getPointStatus,
+  getProjectName,
   isDateInRange,
   normalizeProjects,
   pointTags,
@@ -28,9 +31,7 @@ const ANOMALY_OPTIONS = [
   "缺视频",
 ];
 
-function pointProjectName(point) {
-  return point?.project_name || point?.project || point?.project_id || point?.projectName || "未登记项目";
-}
+const TIME_OPTIONS = ["全部时间", "今天", "近7天", "本月"];
 
 export function PointsPage({
   data,
@@ -54,8 +55,9 @@ export function PointsPage({
     project: activeProject,
     status: "全部状态",
     anomaly: "异常筛选",
+    workerId: "all",
     tag: "全部标签",
-    timeRange,
+    timeRange: timeRange || "近7天",
     search: "",
     page: 1,
     pageSize: 10,
@@ -81,41 +83,41 @@ export function PointsPage({
   const filtered = useMemo(() => {
     const keyword = filters.search.trim().toLowerCase();
     const base = data.points.filter((point) => {
-      const projectName = pointProjectName(point);
+      const mapped = getPointDisplayModel(point, { projects: data.projects, tasks: data.tasks, workers: data.workers });
+      const projectName = mapped.projectName;
       const projectOk = filters.project === "all" || projectName === filters.project;
       const statusOk = filters.status === "全部状态" || getPointStatus(point) === filters.status;
       const anomalies = getPointAnomalies(point, data.photos, data.tasks, data.projects);
       const anomalyOk = filters.anomaly === "异常筛选" || anomalies.includes(filters.anomaly);
+      const pointTasks = data.tasks.filter((task) => String(taskPointId(task)) === String(point.id));
+      const workerOk = filters.workerId === "all"
+        || pointTasks.some((task) => String(taskWorkerId(task)) === String(filters.workerId))
+        || data.workers.some((worker) => String(worker.id) === String(filters.workerId) && mapped.currentWorkerName === worker.name);
       const tagOk = filters.tag === "全部标签" || pointTags(point, data.photos).includes(filters.tag);
       const timeOk = isDateInRange(point.updated_at || point.completed_at || point.created_at, filters.timeRange);
-      const pointTasks = data.tasks.filter((task) => String(taskPointId(task)) === String(point.id));
       const assignedWorkers = assignedWorkersForPoint(point, data.tasks, data.workers).map((worker) => worker.name).join(" ");
       const taskWorkers = pointTasks.map((task) => String(taskWorkerId(task))).join(" ");
       const haystack = [
         getPointCode(point),
-        pointProjectName(point),
-        getPointAddress(point),
-        point?.detail_address,
-        point?.address,
+        projectName,
+        mapped.address,
+        getPointKCode(point),
+        mapped.currentWorkerName,
+        mapped.captainName,
+        mapped.scoutName,
         point?.landlord_name,
         point?.landlord_phone,
-        point?.captain_name,
-        point?.worker_name,
-        point?.install_captain_name,
-        point?.scout_name,
-        point?.wall_team_name,
-        point?.k_code,
         assignedWorkers,
         taskWorkers,
         anomalies.join(" "),
       ].join(" ").toLowerCase();
-      return projectOk && statusOk && anomalyOk && tagOk && timeOk && (!keyword || haystack.includes(keyword));
+      return projectOk && statusOk && anomalyOk && workerOk && tagOk && timeOk && (!keyword || haystack.includes(keyword));
     });
 
     const sorted = [...base].sort((a, b) => {
       const dir = sort.dir === "asc" ? 1 : -1;
       const value = (point) => {
-        if (sort.key === "project") return pointProjectName(point);
+        if (sort.key === "project") return getProjectName(point, data.projects);
         if (sort.key === "status") return getPointStatus(point);
         if (sort.key === "updated") return new Date(point.updated_at || point.created_at || 0).getTime();
         return getPointCode(point);
@@ -169,7 +171,7 @@ export function PointsPage({
           <input
             value={filters.search}
             onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value, page: 1 }))}
-            placeholder="搜索点位编号 / 地址 / 项目"
+            placeholder="搜索点位编号 / 地址 / 项目 / 师傅"
           />
         </label>
         <label>
@@ -191,10 +193,23 @@ export function PointsPage({
           </select>
         </label>
         <label>
+          <span>师傅</span>
+          <select value={filters.workerId} onChange={(event) => setFilters((current) => ({ ...current, workerId: event.target.value, page: 1 }))}>
+            <option value="all">全部师傅</option>
+            {data.workers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name}</option>)}
+          </select>
+        </label>
+        <label>
           <span>标签</span>
           <select value={filters.tag} onChange={(event) => setFilters((current) => ({ ...current, tag: event.target.value, page: 1 }))}>
             <option>全部标签</option>
             {tags.map((tag) => <option key={tag}>{tag}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>时间</span>
+          <select value={filters.timeRange} onChange={(event) => setFilters((current) => ({ ...current, timeRange: event.target.value, page: 1 }))}>
+            {TIME_OPTIONS.map((item) => <option key={item}>{item}</option>)}
           </select>
         </label>
         <div className="pointToolbarActions">
@@ -214,9 +229,7 @@ export function PointsPage({
             <button type="button" onClick={() => showBatchHint("批量打标签")}>批量打标签</button>
             <button type="button" onClick={() => showBatchHint("批量移除标签")}>批量移除标签</button>
             <button type="button" onClick={() => onDispatchPoint(null)}>批量派单</button>
-            <button type="button" onClick={() => exportData(filtered.filter((point) => selectedIds.includes(point.id)))}>导出选中</button>
-            <button type="button" onClick={onMapSelected}>跳到地图</button>
-            <button type="button" onClick={() => setSelectedIds([])}>清空选择</button>
+            <button type="button" onClick={() => exportData(filtered.filter((point) => selectedIds.includes(point.id)))}>导出所选</button>
           </div>
         )}
       </section>
@@ -254,6 +267,7 @@ export function PointsPage({
         photos={data.photos}
         tasks={data.tasks}
         workers={data.workers}
+        projects={data.projects}
         onClose={() => setDetailPoint(null)}
         onEdit={onEditPoint}
         onSite={onOpenSite}

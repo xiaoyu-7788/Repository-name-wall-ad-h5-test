@@ -911,7 +911,7 @@ a {
 
 .pointToolbar {
   display: grid;
-  grid-template-columns: minmax(260px, 1.5fr) repeat(4, minmax(150px, 1fr));
+  grid-template-columns: minmax(260px, 1.6fr) repeat(6, minmax(138px, 1fr));
   gap: 12px;
   align-items: end;
   padding: 18px 20px;
@@ -927,6 +927,7 @@ a {
 
 .pointToolbarSearch {
   min-width: 0;
+  grid-column: span 2;
 }
 
 .pointToolbarActions {
@@ -934,6 +935,7 @@ a {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+  grid-column: span 2;
 }
 
 .pointBatchBar {
@@ -979,6 +981,7 @@ a {
   padding: 14px 12px;
 }
 
+.pointCodeCell,
 .projectCell,
 .addressCell,
 .workerCell,
@@ -990,6 +993,7 @@ a {
 }
 
 .projectCell strong,
+.pointCodeCell strong,
 .addressCell strong,
 .workerCell strong,
 .materialCell strong,
@@ -999,6 +1003,7 @@ a {
 }
 
 .projectCell span,
+.pointCodeCell span,
 .addressCell span,
 .workerCell span,
 .materialCell span,
@@ -1031,6 +1036,53 @@ a {
 
 .pointsPagination {
   margin-top: 0;
+}
+
+.pointDetailDrawer {
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.pointDetailHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.pointDetailHead span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pointDetailHead b {
+  color: #0f766e;
+  font-size: 13px;
+}
+
+.pointDetailGrid div {
+  min-height: 72px;
+}
+
+.pointMediaStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pointMediaStrip span {
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pointDetailActions {
+  margin-top: 8px;
 }
 
 .points-final-page {
@@ -4497,6 +4549,11 @@ button:hover,
 
   .pointToolbar {
     grid-template-columns: 1fr;
+  }
+
+  .pointToolbarSearch,
+  .pointToolbarActions {
+    grid-column: span 1;
   }
 
   .pointBatchBar {

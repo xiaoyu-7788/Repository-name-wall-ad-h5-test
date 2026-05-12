@@ -25,10 +25,11 @@ function pickPointPayload(input = {}) {
 function pointRow(input = {}, fixedId = "") {
   const point = pickPointPayload(input);
   const title = firstValue(point.point_code, point.title, point.code, point.k_code, DEFAULT_POINT_TITLE);
+  const kCode = firstValue(point.k_code, point.kCode);
   return {
     id: firstValue(fixedId, point.id, uid("point")),
     title,
-    address: firstValue(point.address, point.addr),
+    address: firstValue(point.detail_address, point.address, point.addr),
     city: firstValue(point.city),
     landlord_name: firstValue(point.landlord_name, point.landlordName),
     landlord_phone: firstValue(point.landlord_phone, point.landlordPhone),
@@ -36,7 +37,7 @@ function pointRow(input = {}, fixedId = "") {
     captain_phone: firstValue(point.install_captain_phone, point.captain_phone, point.captainPhone, point.leader_phone),
     scout_name: firstValue(point.wall_team_name, point.scout_name, point.scoutName, point.finder_name),
     scout_phone: firstValue(point.wall_team_phone, point.scout_phone, point.scoutPhone, point.finder_phone),
-    k_code: firstValue(point.k_code, point.kCode, title),
+    k_code: kCode || null,
     project_name: firstValue(point.project_name, point.projectName, point.project_id, point.projectId),
     status: firstValue(point.status, DEFAULT_POINT_STATUS),
     tags: Array.isArray(point.tags) ? point.tags.join(",") : firstValue(point.tags),

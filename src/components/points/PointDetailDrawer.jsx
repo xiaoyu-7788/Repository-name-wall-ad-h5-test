@@ -4,67 +4,58 @@ import {
   amapMarkerUrl,
   amapNavigationUrl,
   cnTime,
-  getCaptainName,
-  getCaptainPhone,
-  getPointAddress,
-  getPointCode,
-  getPointLatitude,
-  getPointLongitude,
+  getPointDisplayModel,
   getPointStatus,
   getPointUpdatedAt,
-  getProjectName,
-  getScoutName,
-  getScoutPhone,
+  isPointReadyForAcceptance,
   mediaCounts,
   pointMaterialCompletion,
   pointMedia,
   pointTasks,
-  assignedWorkersForPoint,
-  isPointReadyForAcceptance,
 } from "../../lib/domain";
 import { Drawer } from "../shared/Drawer";
 import { StatusPill } from "../shared/StatusBadge";
 
-export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEdit, onSite }) {
+export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEdit, onSite, projects = [] }) {
   if (!point) return null;
 
+  const mapped = getPointDisplayModel(point, { projects, tasks, workers });
   const media = pointMedia(point, photos);
   const counts = mediaCounts(point, photos);
   const records = pointTasks(tasks, point.id);
-  const assigned = assignedWorkersForPoint(point, tasks, workers);
-  const ready = isPointReadyForAcceptance(point, photos, []);
-  const completion = pointMaterialCompletion(point, photos, []);
+  const completion = pointMaterialCompletion(point, photos, projects);
+  const ready = isPointReadyForAcceptance(point, photos, projects);
 
   return (
-    <Drawer title={getPointCode(point)} subtitle={getPointAddress(point)} onClose={onClose} width="640px">
-      <div className="drawer-section points-final-drawer">
-        <div className="points-final-drawer-head">
+    <Drawer title={mapped.code} subtitle={mapped.projectName} onClose={onClose} width="680px">
+      <div className="drawer-section pointDetailDrawer">
+        <div className="pointDetailHead">
           <StatusPill status={getPointStatus(point)} />
-          <span>{getProjectName(point)}</span>
+          <span>{mapped.address}</span>
           <b>{ready ? "可验收" : "待补齐"}</b>
         </div>
-        <div className="detail-grid single points-final-detail-grid">
-          <div><span>K码</span><b>{point.k_code || "-"}</b></div>
-          <div><span>房东</span><b>{point.landlord_name || "-"} / {point.landlord_phone || "未登记"}</b></div>
-          <div><span>施工队长</span><b>{getCaptainName(point)} / {getCaptainPhone(point)}</b></div>
-          <div><span>找墙队伍</span><b>{getScoutName(point)} / {getScoutPhone(point)}</b></div>
-          <div><span>经纬度</span><b>{getPointLongitude(point) ?? "-"}, {getPointLatitude(point) ?? "-"}</b></div>
-          <div><span>当前师傅</span><b>{assigned.length ? assigned.map((worker) => worker.name).join("、") : "未派单"}</b></div>
-          <div><span>验收状态</span><b>{ready ? "可验收" : "待补齐"}</b></div>
-          <div><span>最近更新时间</span><b>{cnTime(getPointUpdatedAt(point))}</b></div>
-          <div><span>素材齐套</span><b>{completion.completedCount}/{completion.requiredCount} · {completion.status}</b></div>
+        <div className="detail-grid single pointDetailGrid">
+          <div><span>点位编号</span><b>{mapped.code}</b></div>
+          <div><span>K码</span><b>{mapped.kCode}</b></div>
+          <div><span>项目</span><b>{mapped.projectName}</b></div>
+          <div><span>地址</span><b>{mapped.address}</b></div>
+          <div><span>当前师傅</span><b>{mapped.currentWorkerName}</b></div>
+          <div><span>施工队长</span><b>{mapped.captainName} / {mapped.captainPhone}</b></div>
+          <div><span>找墙队伍</span><b>{mapped.scoutName} / {mapped.scoutPhone}</b></div>
+          <div><span>最近更新</span><b>{cnTime(getPointUpdatedAt(point))}</b></div>
+          <div><span>素材情况</span><b>{completion.completedCount}/{completion.requiredCount} · {completion.ratio}%</b></div>
         </div>
       </div>
 
-      <div className="drawer-section points-final-drawer">
+      <div className="drawer-section pointDetailDrawer">
         <h3>素材概览</h3>
-        <div className="media-count-strip points-final-media-strip">
+        <div className="pointMediaStrip">
           <span>现场照片 {counts.site}</span>
           <span>720 全景 {counts.pano}</span>
           <span>视频 {counts.video}</span>
           <span>水印照片 {counts.watermark}</span>
-          <span>凯立德 {counts.kailide}</span>
-          <span>墙租协议 {counts.agreement}</span>
+          <span>凯立德图片 {counts.kailide}</span>
+          <span>墙租协议图片 {counts.agreement}</span>
         </div>
         <div className="material-completion-cell drawer-material-status">
           <b>{completion.status} · {completion.completedCount}/{completion.requiredCount}</b>
@@ -76,7 +67,7 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
         </div>
       </div>
 
-      <div className="drawer-section points-final-drawer">
+      <div className="drawer-section pointDetailDrawer">
         <h3>派单记录</h3>
         <div className="record-list">
           {records.map((task) => {
@@ -87,7 +78,7 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
         </div>
       </div>
 
-      <div className="drawer-actions points-final-drawer-actions">
+      <div className="drawer-actions pointDetailActions">
         <button type="button" onClick={() => onSite(point)}>现场查看</button>
         <button type="button" onClick={() => onEdit(point)}>编辑点位</button>
         <a href={amapMarkerUrl(point)} target="_blank" rel="noreferrer">高德查看</a>

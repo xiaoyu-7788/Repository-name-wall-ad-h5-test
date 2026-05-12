@@ -138,12 +138,45 @@ export function taskPointId(task) {
   return task?.point_id || task?.pointId || "";
 }
 
-export function getProjectName(point) {
-  return point?.project_name || point?.projectName || "未分配项目";
+function firstDisplayValue(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function normalizeDisplayToken(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+export function getProjectName(point, projects = []) {
+  const direct = firstDisplayValue(point?.project_name, point?.project, point?.projectName);
+  if (direct) return direct;
+  const projectId = firstDisplayValue(point?.project_id, point?.projectId);
+  if (projectId) {
+    const matchedProject = projects.find((project) => String(project?.id || "").trim() === projectId || String(project?.name || "").trim() === projectId);
+    if (matchedProject?.name) return matchedProject.name;
+  }
+  return "未登记项目";
 }
 
 export function getPointCode(point) {
   return point?.point_code || point?.title || point?.name || point?.code || point?.id || "未命名点位";
+}
+
+export function getPointKCode(point) {
+  const value = firstDisplayValue(point?.k_code, point?.kCode);
+  if (!value) return "未登记";
+  const pointCodeTokens = [
+    point?.point_code,
+    point?.title,
+    point?.name,
+    point?.id,
+  ].map(normalizeDisplayToken).filter(Boolean);
+  if (pointCodeTokens.includes(normalizeDisplayToken(value))) return "未登记";
+  return value;
 }
 
 export function getPointAddress(point) {
@@ -205,11 +238,11 @@ export function getCity(point) {
 }
 
 export function getCaptainName(point) {
-  return point?.captain_name || point?.install_captain_name || point?.captainName || point?.leader_name || "未登记";
+  return point?.install_captain_name || point?.captain_name || point?.worker_name || point?.captainName || point?.leader_name || "未登记";
 }
 
 export function getCaptainPhone(point) {
-  return point?.captain_phone || point?.install_captain_phone || point?.captainPhone || point?.leader_phone || "未登记";
+  return point?.install_captain_phone || point?.captain_phone || point?.worker_phone || point?.captainPhone || point?.leader_phone || "未登记手机号";
 }
 
 export function getScoutName(point) {
@@ -217,7 +250,32 @@ export function getScoutName(point) {
 }
 
 export function getScoutPhone(point) {
-  return point?.scout_phone || point?.wall_team_phone || point?.scoutPhone || point?.finder_phone || "未登记";
+  return point?.wall_team_phone || point?.scout_phone || point?.scoutPhone || point?.finder_phone || "未登记手机号";
+}
+
+export function getPointDisplayModel(point, options = {}) {
+  const { projects = [], tasks = [], workers = [] } = options;
+  const code = getPointCode(point);
+  const kCode = getPointKCode(point);
+  const address = getPointAddress(point);
+  const projectName = getProjectName(point, projects);
+  const captainName = getCaptainName(point);
+  const captainPhone = getCaptainPhone(point);
+  const scoutName = getScoutName(point);
+  const scoutPhone = getScoutPhone(point);
+  const assigned = assignedWorkersForPoint(point, tasks, workers);
+  const currentWorkerName = firstDisplayValue(point?.captain_name, point?.worker_name, point?.install_captain_name, assigned[0]?.name) || "未派单";
+  return {
+    code,
+    kCode,
+    address,
+    projectName,
+    captainName,
+    captainPhone,
+    scoutName,
+    scoutPhone,
+    currentWorkerName,
+  };
 }
 
 export function normalizeMediaKind(value, fallback = "现场照片") {
