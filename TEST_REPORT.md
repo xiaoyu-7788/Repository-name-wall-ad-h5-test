@@ -742,6 +742,26 @@ npm run test:e2e
 - 地址列第二行继续显示 `K码：...`
 - 页面保持全宽表格显示
 - `/api/wall-points` 继续返回真实数据
+
+线上实际复核结果：
+
+- 生产地址：`https://repository-name-wall-ad-h5-test.vercel.app/admin/points`
+- 常态页面可见：
+  - `查看详情` 3 个
+  - `编辑` 3 个
+  - `更多` 3 个
+  - `删除` 0 个
+- 打开首行 `更多` 菜单后可见：
+  - `现场查看` 1 个
+  - `派单` 1 个
+  - `素材` 1 个
+  - `验收` 1 个
+  - `删除` 1 个
+- 打开 `更多` 菜单时页面常态无右侧常驻抽屉，`drawer-panel` 数量为 `0`，列表保持全宽。
+- `Invoke-WebRequest https://repository-name-wall-ad-h5-test.vercel.app/api/wall-points` 返回：
+  - `ok: true`
+  - `dataCount: 3`
+  - 说明仍在读取真实线上数据。
 - 新增测试覆盖 `/api/dispatch` 写入“施工中”任务、更新点位状态，以及前端源码不再包含 Canvas 本地跳转派单关键字。
 
 线上排查建议：
