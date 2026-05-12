@@ -9,6 +9,7 @@ import {
   healthCheck,
   isLocalDataMode,
   isProxyDataMode,
+  isSupabaseDataMode,
   proxyApi,
   deleteWorker,
   resetWorkerAccessToken,
@@ -45,13 +46,22 @@ export function useH5Data() {
     setLoading(true);
     try {
       const state = await proxyApi.loadState();
-      applyState(state, isLocalDataMode ? "本地演示数据" : "国内接口数据");
+      applyState(state, isLocalDataMode ? "本地演示数据" : isSupabaseDataMode ? "Supabase 正式数据" : "国内接口数据");
       if (!message) {
-        setMessage(isLocalDataMode ? "当前使用本地演示模式，无后端也能完成派单和上传演示。" : `已连接 ${API_BASE_URL || "同源 /api"}`);
+        setMessage(isLocalDataMode
+          ? "当前未连接正式数据库，系统正在使用演示数据。"
+          : isSupabaseDataMode
+            ? "已连接 Supabase 正式数据库。"
+            : `已连接 ${API_BASE_URL || "同源 /api"}`);
       }
     } catch (error) {
       const issue = classifyApiError(error);
       setMessage(`${issue.category}：${issue.detail}`);
+      if (isSupabaseDataMode) {
+        const fallback = await proxyApi.loadDemoState();
+        applyState(fallback, "本地演示数据");
+        setMessage(`${issue.category}：${issue.detail}。当前已临时切换为演示数据，避免页面不可用。`);
+      }
     } finally {
       setLoading(false);
     }
@@ -80,7 +90,7 @@ export function useH5Data() {
         tasks: state.tasks || [],
         photos: state.photos || [],
         trackLogs: state.trackLogs || trackLogs,
-      }, isProxyDataMode ? "真实派单任务" : "本地演示任务");
+      }, isProxyDataMode || isSupabaseDataMode ? "真实派单任务" : "本地演示任务");
       setMessage(`已读取 ${state.points?.length || 0} 个派单点位。`);
     } catch (error) {
       const issue = classifyApiError(error);
@@ -95,7 +105,7 @@ export function useH5Data() {
     setLoading(true);
     try {
       const state = await proxyApi.seedDemo();
-      applyState(state, isLocalDataMode ? "本地演示数据" : "国内接口演示数据");
+      applyState(state, isLocalDataMode ? "本地演示数据" : isSupabaseDataMode ? "Supabase 演示数据" : "国内接口演示数据");
       setMessage("已写入演示数据，可直接筛选点位并派单给师傅移动端。");
     } catch (error) {
       const issue = classifyApiError(error);

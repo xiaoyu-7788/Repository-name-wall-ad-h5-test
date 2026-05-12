@@ -1841,3 +1841,125 @@ npm run test:api
 - 云服务器 Node/Express、Nginx、pm2、上传大小限制和防火墙。
 - `server/data/db.json` 和 `server/uploads/` 的持久化与备份策略。
 - 至少一次真实手机端定位、上传和师傅 token 链接验收。
+
+## 37. 第二阶段：Supabase 正式数据模式切换
+
+更新时间：2026-05-12。
+
+本阶段只处理 Supabase 环境变量、数据源切换、错误提示优化和构建验证，不改后台 UI、不改地图、不新增业务功能。
+
+问题来源：
+- 线上 Vercel 右下角出现“刷新工人定位失败：接口连接失败，服务端环境变量缺失：SUPABASE_CLIENT_DEP_DISABLED”。
+- 审计确认 `SUPABASE_CLIENT_DEP_DISABLED` 来自 `api/_shared.js`：旧 Vercel Serverless API 尝试 `require("@supabase/supabase-js")`，但项目此前没有安装该依赖。
+- 前端此前生产默认 `mock-server`，`src/supabaseClient.js` 只是占位 `supabase = null`，未真正根据 `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` 切换正式数据源。
+
+修改文件：
+- `package.json` / `package-lock.json`：新增 `@supabase/supabase-js`，修复 Vercel API 缺 Supabase SDK 的直接原因。
+- `src/supabaseClient.js`：新增正式 Supabase client 封装，读取 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`；缺失时不崩溃。
+- `src/apiClient.js`：新增 `supabase` 数据模式；配置 Supabase 时自动优先读取正式数据；未配置时进入本地演示；项目、点位、师傅、派单、素材、定位、轨迹接入 Supabase 表。
+- `src/hooks/useH5Data.js`：将提示改为中文业务提示；Supabase 初始化失败时临时切换演示数据，避免页面不可用。
+- `src/lib/domain.js`：将 `SUPABASE_CLIENT_DEP_DISABLED`、服务端环境变量缺失、表不存在等错误转换为中文可理解提示。
+- `api/_shared.js` / `api/worker-tasks.js`：旧 Vercel API 不再把内部错误码直接展示给用户，改为提示检查 Vercel Supabase 环境变量和依赖。
+- `supabase/schema.sql`：更新正式表结构，包含 `projects`、`workers.access_token`、定位字段、`point_photos`、`track_logs` 和 `point-media` bucket。
+- `.env.example`：补齐并整理 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`、高德和 Kimi 变量。
+- `tests/e2e/app.spec.js`：补充 Supabase 正式模式静态断言，同时保留旧 API 派单链路检查。
+
+当前前端数据来源：
+- 项目列表：Supabase `projects`；无 Supabase 时本地演示数据。
+- 点位列表：Supabase `wall_points`；无 Supabase 时本地演示数据。
+- 师傅列表：Supabase `workers`；无 Supabase 时本地演示数据。
+- 派单数据：Supabase `dispatch_tasks`；无 Supabase 时本地演示数据。
+- 素材数据：Supabase `point_photos` + Storage bucket `point-media`；无 Supabase 时本地 blob 演示。
+- 工人定位数据：Supabase `workers` 最新定位字段 + `track_logs`；无 Supabase 时本地演示轨迹。
+- 系统状态数据：前端 `healthCheck()` 按当前数据模式返回；旧 `/api/health` 仍保留给 Express/Vercel API 诊断。
+
+需要在 Vercel 配置：
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+VITE_AMAP_KEY=
+VITE_AMAP_SECURITY_CODE=
+VITE_KIMI_API_KEY=
+```
+
+如果继续使用旧 Vercel Serverless API 代理，还需要服务端变量：
+```env
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+Supabase 需要建表：
+- `projects`
+- `workers`
+- `wall_points`
+- `dispatch_tasks`
+- `point_photos`
+- `track_logs`
+- Storage bucket：`point-media`
+
+验证命令：
+```bash
+npm install
+npm run build
+```
+
+验证结果：
+- `npm install`：通过，依赖已安装；npm audit 仍提示 1 个 high severity，需要后续单独评估依赖升级风险。
+- `npm run build`：通过。
+- Vite 提示主包超过 500KB，这是引入 Supabase SDK 后的包体警告，不是构建失败；后续如有需要可再做代码分包优化。
+
+兼容性说明：
+- Vercel 未配置 Supabase 时，页面不会崩溃，会提示“当前未连接正式数据库，系统正在使用演示数据”。
+- Vercel 配置 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY` 后，前端自动进入 Supabase 正式数据模式。
+- 本阶段未改业务 UI、地图、权限系统或数据库以外的业务流程。
+
+## 38. Vercel API 路由 NOT_FOUND 修复
+
+更新时间：2026-05-12。
+
+本次只处理 Vercel 生产环境 `/api` 路由缺失问题，不修改业务 UI、不改数据库结构、不新增业务功能。
+
+问题判断：
+- Vercel 前端页面可以打开，Supabase 前端环境变量已配置。
+- 线上右下角报错为 `The page could not be found / NOT_FOUND`，说明请求命中了不存在的 Vercel Serverless Function。
+- 全局排查 `fetch`、`/api/`、`worker`、`location`、`task`、`health` 后，确认前端实际请求了多个根目录 `api/` 下尚未补齐的路径。
+
+修复内容：
+- 新增或补齐 Vercel Serverless Function：`/api/health`、`/api/projects`、`/api/wall-points`、`/api/point-media`、`/api/dispatch-tasks`、`/api/track-logs`、`/api/worker-location`、`/api/debug-state`、`/api/import-demo`、`/api/reset-demo`、`/api/complete-point`。
+- 新增动态路由：`/api/projects/:id`、`/api/workers/:id`、`/api/workers/:id/enable`、`/api/workers/:id/access-token`、`/api/workers/:id/heartbeat`、`/api/workers/:id/offline`、`/api/wall-points/:id`、`/api/point-media/:id`、`/api/complete-point/:pointId`、`/api/worker-tasks/:workerId`。
+- 修复 `/api/worker-tasks` 同时兼容 `workerId`、`worker_id`、`worker`、`code` 等查询参数。
+- `/api/workers` 增加 POST 支持，避免 API 模式下新增师傅时只存在 GET 路由。
+- `/api/projects` 增加 GET/POST 和动态 GET/PUT/PATCH/DELETE，避免项目页或项目切换请求在 Vercel 上 404。
+
+验证命令：
+```bash
+node -e "require all api/*.js"
+npm run build
+```
+
+验证结果：
+- 所有根目录 `api/**/*.js` 文件均可被 Node 加载，未发现基础语法或相对路径错误。
+- `npm run build` 通过。
+- 构建仍提示部分 chunk 超过 500KB，这是引入 Supabase SDK 后的包体积 warning，不影响部署。
+
+部署后人工复查：
+- 重新部署 Vercel 后，优先检查 `/api/health`、`/api/projects`、`/api/workers?includeDisabled=true`、`/api/wall-points`、`/api/worker-location` 不应再返回 `NOT_FOUND`。
+- 如果后续仍报错但不是 `NOT_FOUND`，应继续检查 Vercel 服务端环境变量 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY` 是否配置。
+
+补充验证：
+```bash
+npm run test:e2e
+```
+
+补充验证结果：
+- `npm run test:e2e` 通过，11 passed。
+- 其中最后一条静态断言已调整为检查 `src/supabaseClient.js` 中的 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`，与当前 Supabase 客户端封装位置一致。
+
+补充 API 回归：
+```bash
+npm run test:api
+```
+
+补充 API 回归结果：
+- `npm run test:api` 通过。
+- 已确认 `/api/health`、`/api/dispatch`、`/api/worker-tasks/w1`、`/api/point-media/:pointId`、`/api/worker-location`、`/api/debug-state`、`/api/complete-point/:pointId` 等旧链路仍可用。

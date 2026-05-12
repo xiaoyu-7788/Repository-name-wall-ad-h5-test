@@ -57,12 +57,12 @@ module.exports = async function handler(req, res) {
   if (req.method !== "GET") return methodNotAllowed(res, ["GET"]);
   const setup = getSupabaseAdmin();
   if (!setup.client) {
-    return sendJson(res, 500, { ok: false, error: "SERVER_ENV_MISSING", detail: `缺少：${setup.missing.join(", ")}` });
+    return sendJson(res, 500, { ok: false, error: "SERVER_ENV_MISSING", detail: "数据库服务未连接，请检查 Vercel 的 Supabase 环境变量和依赖安装。" });
   }
   const supabase = setup.client;
 
   try {
-    const workerQuery = req.query.worker || req.query.worker_id || req.query.code || "";
+    const workerQuery = req.query.workerId || req.query.worker_id || req.query.worker || req.query.code || req.query.workerIdOrSlug || req.query.workerIdOrToken || "";
     if (!workerQuery) return sendJson(res, 400, { ok: false, error: "WORKER_REQUIRED", detail: "缺少 worker 参数。" });
 
     const worker = await findWorker(supabase, workerQuery);

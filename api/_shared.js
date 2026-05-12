@@ -159,10 +159,16 @@ function getSafeSupabaseEnv() {
 function requireSupabase(res) {
   const setup = getSupabaseAdmin();
   if (!setup.client) {
+    const missingLabels = setup.missing.map((item) => {
+      if (item === "SUPABASE_CLIENT_DEP_DISABLED") return "Supabase SDK 依赖未安装";
+      if (item === "SUPABASE_URL") return "SUPABASE_URL";
+      if (item === "SUPABASE_SERVICE_ROLE_KEY") return "SUPABASE_SERVICE_ROLE_KEY";
+      return item;
+    });
     sendJson(res, 500, {
       ok: false,
       error: "SERVER_ENV_MISSING",
-      detail: `服务端环境变量缺失：${setup.missing.join(", ")}`,
+      detail: `数据库服务未连接，请检查 Vercel 环境变量和依赖安装：${missingLabels.join("、")}`,
       env: setup.env,
     });
     return null;

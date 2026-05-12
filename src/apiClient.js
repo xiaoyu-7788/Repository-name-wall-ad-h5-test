@@ -1,4 +1,4 @@
-import { supabaseEnv } from "./supabaseClient";
+import { isSupabaseConfigured, supabase, supabaseEnv } from "./supabaseClient";
 
 const LOCAL_STORE_KEY = "wall-ad-h5-demo-state";
 const LOCAL_STORE_EVENT = "wall-ad-h5-demo-updated";
@@ -14,7 +14,9 @@ function isLocalHostName(hostname) {
 }
 
 function inferDefaultMode() {
-  if (import.meta.env.PROD) return "mock-server";
+  if (supabaseEnv.forceLocalDemo) return "local";
+  if (isSupabaseConfigured) return "supabase";
+  if (import.meta.env.PROD) return "local";
   const host = getBrowserHostname();
   return isLocalHostName(host) ? "local" : "mock-server";
 }
@@ -47,16 +49,17 @@ export function getApiRequestUrl(path) {
 }
 
 const configuredMode = String(import.meta.env.VITE_DATA_MODE || "").toLowerCase();
-const rawMode = supabaseEnv.forceLocalDemo ? "local" : (configuredMode || inferDefaultMode());
-export const DATA_MODE = ["local", "mock-server", "production-api"].includes(rawMode) ? rawMode : inferDefaultMode();
+const rawMode = supabaseEnv.forceLocalDemo ? "local" : (isSupabaseConfigured ? "supabase" : (configuredMode || inferDefaultMode()));
+export const DATA_MODE = ["local", "mock-server", "production-api", "supabase"].includes(rawMode) ? rawMode : inferDefaultMode();
 export const API_BASE_URL = getApiBaseUrl();
 
 export const isLocalDataMode = DATA_MODE === "local";
 export const isMockServerMode = DATA_MODE === "mock-server";
 export const isProductionApiMode = DATA_MODE === "production-api";
+export const isSupabaseDataMode = DATA_MODE === "supabase";
 export const isProxyDataMode = isMockServerMode || isProductionApiMode;
 export const isRemoteDataMode = isProxyDataMode;
-export const isDirectSupabaseMode = false;
+export const isDirectSupabaseMode = isSupabaseDataMode;
 
 export const apiEnv = {
   ...supabaseEnv,
@@ -143,6 +146,131 @@ function materialCompletionForPoint(point, photos = [], projects = []) {
   const hasKind = (kind) => pointPhotos.some((photo) => normalizeMediaKind(photo.kind || photo.media_kind || photo.file_name || photo.mime_type) === kind);
   const missing = rules.filter((kind) => !hasKind(kind));
   return { rules, missing, complete: missing.length === 0, hasAny: pointPhotos.length > 0 };
+}
+
+function serializeMaybeJson(value) {
+  if (Array.isArray(value) || (value && typeof value === "object")) return value;
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizeSupabaseWorker(row = {}, index = 0, workers = []) {
+  return normalizeWorker({
+    ...row,
+    accessToken: row.access_token || row.accessToken,
+    workerKey: row.worker_key || row.workerKey || row.code,
+    carNo: row.car_no || row.carNo,
+    teamType: row.team_type || row.teamType,
+    teamTypeName: row.team_type_name || row.teamTypeName,
+    projectId: row.project_id || row.projectId,
+    lastSeenAt: row.last_seen_at || row.lastSeenAt,
+    lastOnlineAt: row.last_online_at || row.lastOnlineAt,
+    lastOfflineAt: row.last_offline_at || row.lastOfflineAt,
+    lastLocationAt: row.last_location_at || row.lastLocationAt,
+    stoppedSeconds: row.stopped_seconds || row.stoppedSeconds,
+  }, index, workers);
+}
+
+function normalizeSupabasePhoto(row = {}) {
+  return {
+    ...row,
+    kind: normalizeMediaKind(row.kind || row.media_kind || row.file_name || row.url),
+    media_kind: row.media_kind || row.kind,
+    pointId: row.point_id,
+    workerId: row.worker_id,
+    fileName: row.file_name,
+  };
+}
+
+function supabaseError(error, fallback = "数据库操作失败") {
+  const next = new Error(error?.message || fallback);
+  next.category = "数据库连接异常";
+  next.detail = error?.message || fallback;
+  next.code = error?.code;
+  return next;
+}
+
+async function supabaseSelect(table, select = "*") {
+  const { data, error } = await supabase.from(table).select(select);
+  if (error) throw supabaseError(error, `读取 ${table} 失败`);
+  return data || [];
+}
+
+async function supabaseMaybeSelect(table, select = "*") {
+  try {
+    return await supabaseSelect(table, select);
+  } catch (error) {
+    const message = String(error?.message || error?.detail || "");
+    if (/relation|does not exist|schema cache|42P01/i.test(message) || error?.code === "42P01") return [];
+    throw error;
+  }
+}
+
+function buildSupabaseWorkerPayload(worker = {}, existing = {}) {
+  const id = worker.id || existing.id || uid("worker");
+  const slug = worker.slug || worker.workerKey || worker.worker_key || worker.code || slugifyWorker(worker.name || id, id);
+  const accessToken = workerAccessToken(worker) || workerAccessToken(existing) || generateWorkerAccessToken();
+  const carNo = normalizeCarNo(worker.carNo || worker.car_no || existing.car_no || "");
+  const teamType = worker.teamType || worker.team_type || existing.team_type || "install";
+  return {
+    id,
+    code: worker.code || worker.workerKey || worker.worker_key || existing.code || slug,
+    worker_key: worker.worker_key || worker.workerKey || existing.worker_key || slug,
+    slug,
+    access_token: accessToken,
+    name: worker.name || existing.name || "未命名师傅",
+    phone: worker.phone || existing.phone || "",
+    car_no: carNo,
+    team_type: teamType,
+    team_type_name: worker.teamTypeName || worker.team_type_name || getWorkerTeamTypeName({ teamType }),
+    project_id: worker.projectId || worker.project_id || existing.project_id || "all",
+    project_name: worker.project_name || worker.projectName || existing.project_name || "",
+    enabled: worker.enabled ?? existing.enabled ?? true,
+    online: worker.online ?? existing.online ?? false,
+    lng: Number(worker.lng ?? existing.lng ?? 113.2644),
+    lat: Number(worker.lat ?? existing.lat ?? 23.1291),
+    speed: Number(worker.speed ?? existing.speed ?? 0),
+    moving: worker.moving ?? existing.moving ?? false,
+    stopped_seconds: Number(worker.stoppedSeconds ?? worker.stopped_seconds ?? existing.stopped_seconds ?? 0),
+    last_seen_at: worker.lastSeenAt || worker.last_seen_at || existing.last_seen_at || null,
+    last_online_at: worker.lastOnlineAt || worker.last_online_at || existing.last_online_at || null,
+    last_offline_at: worker.lastOfflineAt || worker.last_offline_at || existing.last_offline_at || null,
+    last_location_at: worker.lastLocationAt || worker.last_location_at || existing.last_location_at || null,
+    updated_at: nowIso(),
+    created_at: worker.created_at || existing.created_at || nowIso(),
+  };
+}
+
+function buildSupabaseProjectPayload(project = {}) {
+  return {
+    id: project.id || project.name || uid("project"),
+    name: project.name || project.id || "新项目",
+    client: project.client || "未填写客户",
+    month: project.month || "未设置年月",
+    color: project.color || "#2563eb",
+    hidden: Boolean(project.hidden),
+    archived: Boolean(project.archived),
+    material_rules: normalizeMaterialRules(project.materialRules || project.material_rules, project.name || project.id),
+    updated_at: nowIso(),
+    created_at: project.created_at || nowIso(),
+  };
+}
+
+function buildSupabasePointPayload(point = {}) {
+  return {
+    ...point,
+    id: point.id || uid("point"),
+    title: point.title || point.k_code || "新点位",
+    status: normalizePointStatus(point.status),
+    lng: point.lng == null || point.lng === "" ? null : Number(point.lng),
+    lat: point.lat == null || point.lat === "" ? null : Number(point.lat),
+    updated_at: nowIso(),
+    created_at: point.created_at || nowIso(),
+  };
 }
 
 export function generateWorkerAccessToken() {
@@ -242,6 +370,7 @@ function workerKeyFromDraft(worker = {}) {
 }
 
 export function getDataModeLabel(mode = DATA_MODE) {
+  if (mode === "supabase") return "Supabase 正式数据模式";
   if (mode === "mock-server") return "国内 Mock Server 模式";
   if (mode === "production-api") return "国内生产 API 模式";
   return "本地演示模式";
@@ -520,13 +649,46 @@ async function remoteState() {
   return normalizeState({ projects, workers, wallPoints: points, dispatchTasks: tasks, pointMedia: media, trackLogs });
 }
 
+async function supabaseState() {
+  if (!supabase) return createDemoState();
+  const [projects, workers, points, tasks, photos, trackLogs] = await Promise.all([
+    supabaseMaybeSelect("projects"),
+    supabaseSelect("workers"),
+    supabaseSelect("wall_points"),
+    supabaseSelect("dispatch_tasks"),
+    supabaseSelect("point_photos"),
+    supabaseMaybeSelect("track_logs"),
+  ]);
+  return normalizeState({
+    projects: projects.map((project) => ({
+      ...project,
+      materialRules: serializeMaybeJson(project.material_rules || project.materialRules || []),
+    })),
+    workers: workers.map(normalizeSupabaseWorker),
+    wallPoints: points,
+    dispatchTasks: tasks,
+    pointMedia: photos.map(normalizeSupabasePhoto),
+    trackLogs,
+  });
+}
+
 export async function healthCheck() {
   if (isLocalDataMode) return { mode: DATA_MODE, label: getDataModeLabel(), ok: true };
+  if (isSupabaseDataMode) {
+    return {
+      ok: true,
+      mode: DATA_MODE,
+      label: getDataModeLabel(),
+      supabaseConfigured: isSupabaseConfigured,
+      message: isSupabaseConfigured ? "已连接 Supabase 正式数据源" : "当前未配置 Supabase 环境变量，已进入演示模式。",
+    };
+  }
   return requestApi("/api/health");
 }
 
 export async function getProjects() {
   if (isLocalDataMode) return readLocalState().projects;
+  if (isSupabaseDataMode) return (await supabaseState()).projects;
   return requestApi("/api/projects");
 }
 
@@ -549,6 +711,12 @@ export async function saveProject(project) {
     writeLocalState({ ...state, projects: [next, ...state.projects.filter((item) => item.id !== next.id)] });
     return next;
   }
+  if (isSupabaseDataMode) {
+    const payload = buildSupabaseProjectPayload(project);
+    const { data, error } = await supabase.from("projects").upsert(payload, { onConflict: "id" }).select("*").single();
+    if (error) throw supabaseError(error, "保存项目失败");
+    return { ...data, materialRules: serializeMaybeJson(data.material_rules || []) };
+  }
   if (project.id) return requestApi(`/api/projects/${encodeURIComponent(project.id)}`, { method: "PUT", body: JSON.stringify(project) });
   return requestApi("/api/projects", { method: "POST", body: JSON.stringify(project) });
 }
@@ -557,6 +725,11 @@ export async function deleteProject(projectId) {
   if (isLocalDataMode) {
     const state = readLocalState();
     writeLocalState({ ...state, projects: state.projects.filter((item) => item.id !== projectId) });
+    return { id: projectId };
+  }
+  if (isSupabaseDataMode) {
+    const { error } = await supabase.from("projects").delete().eq("id", projectId);
+    if (error) throw supabaseError(error, "删除项目失败");
     return { id: projectId };
   }
   return requestApi(`/api/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
@@ -586,6 +759,14 @@ function workerConflict(workers, draft, currentId = "") {
 export async function getWorkers(options = {}) {
   if (isLocalDataMode) {
     const workers = readLocalState().workers;
+    return options.enabledOnly ? workers.filter((worker) => worker.enabled !== false) : workers;
+  }
+  if (isSupabaseDataMode) {
+    let query = supabase.from("workers").select("*").order("name");
+    if (options.enabledOnly) query = query.eq("enabled", true);
+    const { data, error } = await query;
+    if (error) throw supabaseError(error, "读取师傅失败");
+    const workers = (data || []).map(normalizeSupabaseWorker);
     return options.enabledOnly ? workers.filter((worker) => worker.enabled !== false) : workers;
   }
   return requestApi(workersPath(options));
@@ -618,6 +799,12 @@ export async function getWorker(workerId) {
   if (isLocalDataMode) {
     return findWorkerByIdentifier(readLocalState().workers, workerId);
   }
+  if (isSupabaseDataMode) {
+    const workers = await getWorkers({ includeDisabled: true });
+    const worker = findWorkerByIdentifier(workers, workerId);
+    if (!worker) throw new Error("链接无效或已过期，请联系管理员重新发送师傅链接。");
+    return worker;
+  }
   return requestApi(`/api/workers/${encodeURIComponent(workerId)}`);
 }
 
@@ -648,6 +835,13 @@ export async function saveWorker(worker) {
     writeLocalState({ ...state, workers: [next, ...state.workers.filter((item) => item.id !== next.id)] });
     return next;
   }
+  if (isSupabaseDataMode) {
+    const existing = worker.id ? (await getWorkers({ includeDisabled: true })).find((item) => String(item.id) === String(worker.id)) || {} : {};
+    const payload = buildSupabaseWorkerPayload(worker, existing);
+    const { data, error } = await supabase.from("workers").upsert(payload, { onConflict: "id" }).select("*").single();
+    if (error) throw supabaseError(error, "保存师傅失败");
+    return normalizeSupabaseWorker(data);
+  }
   if (worker.id) return requestApi(`/api/workers/${encodeURIComponent(worker.id)}`, { method: "PUT", body: JSON.stringify(worker) });
   return requestApi("/api/workers", { method: "POST", body: JSON.stringify(worker) });
 }
@@ -660,6 +854,11 @@ export async function deleteWorker(workerId) {
       workers: state.workers.filter((worker) => String(worker.id) !== String(workerId)),
       tasks: state.tasks.filter((task) => String(task.worker_id || task.workerId) !== String(workerId)),
     });
+    return { id: workerId, deleted: true };
+  }
+  if (isSupabaseDataMode) {
+    const { error } = await supabase.from("workers").delete().eq("id", workerId);
+    if (error) throw supabaseError(error, "删除师傅失败");
     return { id: workerId, deleted: true };
   }
   return requestApi(`/api/workers/${encodeURIComponent(workerId)}`, { method: "DELETE" });
@@ -686,6 +885,17 @@ export async function setWorkerEnabled(workerId, enabled) {
     });
     return { id: workerId, enabled };
   }
+  if (isSupabaseDataMode) {
+    const payload = {
+      enabled,
+      online: false,
+      last_offline_at: enabled ? null : nowIso(),
+      updated_at: nowIso(),
+    };
+    const { data, error } = await supabase.from("workers").update(payload).eq("id", workerId).select("*").single();
+    if (error) throw supabaseError(error, "更新师傅启用状态失败");
+    return normalizeSupabaseWorker(data);
+  }
   return requestApi(`/api/workers/${encodeURIComponent(workerId)}/enable`, { method: "PATCH", body: JSON.stringify({ enabled }) });
 }
 
@@ -701,6 +911,17 @@ export async function resetWorkerAccessToken(workerId) {
     });
     writeLocalState({ ...state, workers });
     return updated || { id: workerId };
+  }
+  if (isSupabaseDataMode) {
+    const accessToken = generateWorkerAccessToken();
+    const { data, error } = await supabase
+      .from("workers")
+      .update({ access_token: accessToken, updated_at: nowIso() })
+      .eq("id", workerId)
+      .select("*")
+      .single();
+    if (error) throw supabaseError(error, "重置师傅链接失败");
+    return normalizeSupabaseWorker(data);
   }
   return requestApi(`/api/workers/${encodeURIComponent(workerId)}/access-token`, { method: "PATCH" });
 }
@@ -741,6 +962,27 @@ export async function sendWorkerHeartbeat(workerId, payload = {}) {
     writeLocalState({ ...state, workers });
     return updated;
   }
+  if (isSupabaseDataMode) {
+    const worker = await getWorker(workerId);
+    if (worker.enabled === false) throw new Error("该师傅链接已停用，请联系管理员。");
+    const lng = Number(payload.lng);
+    const lat = Number(payload.lat);
+    const updates = {
+      online: true,
+      last_seen_at: timestamp,
+      last_online_at: worker.lastOnlineAt || worker.last_online_at || timestamp,
+      updated_at: timestamp,
+    };
+    if (Number.isFinite(lng) && Number.isFinite(lat)) {
+      updates.lng = lng;
+      updates.lat = lat;
+    }
+    if (payload.speed !== undefined) updates.speed = Number(payload.speed || 0);
+    if (payload.moving !== undefined) updates.moving = payload.moving === true || payload.moving === "true" || payload.moving === 1 || payload.moving === "1";
+    const { data, error } = await supabase.from("workers").update(updates).eq("id", worker.id).select("*").single();
+    if (error) throw supabaseError(error, "更新师傅心跳失败");
+    return normalizeSupabaseWorker(data);
+  }
   return requestApi(`/api/workers/${encodeURIComponent(workerId)}/heartbeat`, { method: "POST", body: JSON.stringify({ online: true, source: "worker-page", ...payload }) });
 }
 
@@ -765,6 +1007,17 @@ export async function markWorkerOffline(workerId) {
     if (!updated) return { id: workerId, offline: true };
     writeLocalState({ ...state, workers });
     return updated;
+  }
+  if (isSupabaseDataMode) {
+    const worker = await getWorker(workerId);
+    const { data, error } = await supabase
+      .from("workers")
+      .update({ online: false, last_offline_at: timestamp, updated_at: timestamp })
+      .eq("id", worker.id)
+      .select("*")
+      .single();
+    if (error) throw supabaseError(error, "标记师傅离线失败");
+    return normalizeSupabaseWorker(data);
   }
   return requestApi(`/api/workers/${encodeURIComponent(workerId)}/offline`, { method: "POST", body: JSON.stringify({ source: "worker-page" }) });
 }
@@ -847,11 +1100,48 @@ export async function saveWorkerLocation(payload) {
     return { worker: next.workers.find((worker) => matchesWorkerIdentifier(worker, workerId)) || null, location: locationRecord };
   }
 
+  if (isSupabaseDataMode) {
+    const worker = await getWorker(location.workerId);
+    if (worker.enabled === false) throw new Error("该师傅链接已停用，请联系管理员。");
+    const updates = {
+      lng: location.lng,
+      lat: location.lat,
+      accuracy: location.accuracy,
+      speed: location.speed,
+      heading: location.heading,
+      moving: location.moving,
+      stopped_seconds: location.stoppedSeconds,
+      online: true,
+      last_seen_at: location.timestamp,
+      last_online_at: worker.lastOnlineAt || worker.last_online_at || location.timestamp,
+      last_location_at: location.timestamp,
+      updated_at: nowIso(),
+    };
+    const { data: updatedWorker, error: workerError } = await supabase.from("workers").update(updates).eq("id", worker.id).select("*").single();
+    if (workerError) throw supabaseError(workerError, "保存师傅定位失败");
+    const trackLog = {
+      id: uid("track"),
+      worker_id: worker.id,
+      worker_name: worker.name,
+      event: location.event || (location.moving ? "实时定位" : "定位停车"),
+      speed: location.speed,
+      stop_minutes: Math.round(location.stoppedSeconds / 60),
+      lng: location.lng,
+      lat: location.lat,
+      project_name: location.project_name || worker.project_name || "",
+      recorded_at: location.timestamp,
+      created_at: nowIso(),
+    };
+    await supabase.from("track_logs").insert(trackLog).select("*").maybeSingle();
+    return { worker: normalizeSupabaseWorker(updatedWorker), location: { id: trackLog.id, ...location } };
+  }
+
   return requestApi("/api/worker-location", { method: "POST", body: JSON.stringify(location) });
 }
 
 export async function getWallPoints() {
   if (isLocalDataMode) return readLocalState().points;
+  if (isSupabaseDataMode) return (await supabaseState()).points;
   return requestApi("/api/points");
 }
 
@@ -874,6 +1164,12 @@ export async function saveWallPoint(point) {
     writeLocalState({ ...state, points: [next, ...state.points.filter((item) => item.id !== next.id)] });
     return next;
   }
+  if (isSupabaseDataMode) {
+    const payload = buildSupabasePointPayload(point);
+    const { data, error } = await supabase.from("wall_points").upsert(payload, { onConflict: "id" }).select("*").single();
+    if (error) throw supabaseError(error, "保存点位失败");
+    return data;
+  }
   if (point.id) return requestApi(`/api/wall-points/${encodeURIComponent(point.id)}`, { method: "PUT", body: JSON.stringify(point) });
   return requestApi("/api/wall-points", { method: "POST", body: JSON.stringify(point) });
 }
@@ -887,6 +1183,11 @@ export async function deleteWallPoint(pointId) {
       tasks: state.tasks.filter((item) => (item.point_id || item.pointId) !== pointId),
       photos: state.photos.filter((item) => item.point_id !== pointId),
     });
+    return { id: pointId };
+  }
+  if (isSupabaseDataMode) {
+    const { error } = await supabase.from("wall_points").delete().eq("id", pointId);
+    if (error) throw supabaseError(error, "删除点位失败");
     return { id: pointId };
   }
   return requestApi(`/api/wall-points/${encodeURIComponent(pointId)}`, { method: "DELETE" });
@@ -925,6 +1226,36 @@ export async function dispatchPoints(workerIdOrPayload, pointIds = []) {
       points: state.points.map((point) => selected.includes(String(point.id)) && normalizePointStatus(point.status) !== "已完成" ? { ...point, status: "已派单", updated_at: nowIso() } : point),
     });
     return { ok: true, workerId, inserted: tasks.length, updated_points: selected.length, points: next.points, point_ids: selected };
+  }
+  if (isSupabaseDataMode) {
+    const selected = [...new Set((payload.pointIds || []).map(String))];
+    const worker = await getWorker(payload.workerId);
+    if (!worker) throw new Error("链接无效或已过期，请联系管理员重新发送师傅链接。");
+    if (worker.enabled === false) throw new Error("该师傅链接已停用，请联系管理员。");
+    const tasks = selected.map((pointId) => ({
+      id: uid("task"),
+      worker_id: worker.id,
+      point_id: pointId,
+      status: "已派单",
+      assigned_at: nowIso(),
+      created_at: nowIso(),
+    }));
+    if (selected.length) {
+      const { error: deleteError } = await supabase
+        .from("dispatch_tasks")
+        .delete()
+        .eq("worker_id", worker.id)
+        .in("point_id", selected);
+      if (deleteError) throw supabaseError(deleteError, "清理重复派单失败");
+      const { error: insertError } = await supabase.from("dispatch_tasks").insert(tasks);
+      if (insertError) throw supabaseError(insertError, "写入派单失败");
+      const { error: pointError } = await supabase
+        .from("wall_points")
+        .update({ status: "已派单", updated_at: nowIso() })
+        .in("id", selected);
+      if (pointError) throw supabaseError(pointError, "更新点位状态失败");
+    }
+    return { ok: true, workerId: worker.id, inserted: tasks.length, updated_points: selected.length, point_ids: selected };
   }
   return requestApi("/api/dispatch", { method: "POST", body: JSON.stringify(payload) });
 }
@@ -982,6 +1313,24 @@ export async function getWorkerTasks(workerId) {
     const points = state.points.filter((point) => pointIds.includes(String(point.id)));
     return normalizeWorkerTasksPayload({ worker, workerId: worker?.id || workerId, count: points.length, tasks, points, photos: state.photos, trackLogs: state.trackLogs }, workerId);
   }
+  if (isSupabaseDataMode) {
+    const worker = await getWorker(workerId);
+    if (!worker) throw new Error("链接无效或已过期，请联系管理员重新发送师傅链接。");
+    if (worker.enabled === false) throw new Error("该师傅链接已停用，请联系管理员。");
+    const [{ data: tasks, error: taskError }, { data: photos, error: photoError }, { data: trackLogs }] = await Promise.all([
+      supabase.from("dispatch_tasks").select("*").eq("worker_id", worker.id).order("created_at", { ascending: false }),
+      supabase.from("point_photos").select("*").order("created_at", { ascending: false }),
+      supabase.from("track_logs").select("*").eq("worker_id", worker.id).order("created_at", { ascending: false }),
+    ]);
+    if (taskError) throw supabaseError(taskError, "读取师傅任务失败");
+    if (photoError) throw supabaseError(photoError, "读取素材失败");
+    const pointIds = [...new Set((tasks || []).map((task) => task.point_id).filter(Boolean))];
+    const { data: points, error: pointError } = pointIds.length
+      ? await supabase.from("wall_points").select("*").in("id", pointIds)
+      : { data: [], error: null };
+    if (pointError) throw supabaseError(pointError, "读取任务点位失败");
+    return normalizeWorkerTasksPayload({ worker, workerId: worker.id, count: points.length, tasks, points, photos: (photos || []).map(normalizeSupabasePhoto), trackLogs: trackLogs || [] }, workerId);
+  }
   return normalizeWorkerTasksPayload(await requestApi(`/api/worker-tasks?workerId=${encodeURIComponent(workerId)}`), workerId);
 }
 
@@ -1009,6 +1358,41 @@ export async function uploadPointMedia(pointId, files, meta = {}) {
     writeLocalState({ ...state, photos, points });
     return media;
   }
+  if (isSupabaseDataMode) {
+    const uploaded = [];
+    for (const file of list) {
+      const fileName = file.name || `upload-${Date.now()}`;
+      const storagePath = `${pointId}/${meta.workerId || meta.worker_id || "unknown"}/${Date.now()}-${fileName}`;
+      const { error: uploadError } = await supabase.storage.from("point-media").upload(storagePath, file, {
+        contentType: file.type || "application/octet-stream",
+        upsert: false,
+      });
+      if (uploadError) throw supabaseError(uploadError, "上传素材文件失败");
+      const { data: publicData } = supabase.storage.from("point-media").getPublicUrl(storagePath);
+      const record = {
+        id: uid("media"),
+        point_id: pointId,
+        worker_id: meta.workerId || meta.worker_id || null,
+        url: publicData?.publicUrl || "",
+        file_name: fileName,
+        kind: normalizeMediaKind(meta.kind || fileName || file.type),
+        content_type: file.type || "",
+        storage_path: storagePath,
+        created_at: nowIso(),
+      };
+      const { data, error } = await supabase.from("point_photos").insert(record).select("*").single();
+      if (error) throw supabaseError(error, "保存素材记录失败");
+      uploaded.push(normalizeSupabasePhoto(data));
+    }
+    const state = await supabaseState();
+    const point = state.points.find((item) => String(item.id) === String(pointId));
+    if (point) {
+      const completion = materialCompletionForPoint(point, state.photos, state.projects);
+      const nextStatus = completion.complete ? "待验收" : "已上传素材";
+      await supabase.from("wall_points").update({ status: nextStatus, updated_at: nowIso() }).eq("id", pointId);
+    }
+    return uploaded;
+  }
   const form = new FormData();
   list.forEach((file) => form.append("files", file));
   Object.entries(meta).forEach(([key, value]) => {
@@ -1028,11 +1412,22 @@ export async function completePoint(pointId, payload = {}) {
     });
     return { id: pointId, status: "已完成" };
   }
+  if (isSupabaseDataMode) {
+    const completedAt = nowIso();
+    const { error: pointError } = await supabase
+      .from("wall_points")
+      .update({ status: "已完成", completed_at: completedAt, updated_at: completedAt })
+      .eq("id", pointId);
+    if (pointError) throw supabaseError(pointError, "完成点位失败");
+    await supabase.from("dispatch_tasks").update({ status: "已完成", completed_at: completedAt }).eq("point_id", pointId);
+    return { id: pointId, status: "已完成" };
+  }
   return requestApi("/api/complete-point", { method: "POST", body: JSON.stringify({ ...payload, pointId, point_id: pointId }) });
 }
 
 export async function getTrackLogs() {
   if (isLocalDataMode) return readLocalState().trackLogs;
+  if (isSupabaseDataMode) return (await supabaseMaybeSelect("track_logs")).sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
   return requestApi("/api/track-logs");
 }
 
@@ -1043,16 +1438,32 @@ export async function saveTrackLog(log) {
     writeLocalState({ ...state, trackLogs: [next, ...state.trackLogs] });
     return next;
   }
+  if (isSupabaseDataMode) {
+    const next = { id: log.id || uid("track"), ...log, created_at: nowIso() };
+    const { data, error } = await supabase.from("track_logs").insert(next).select("*").single();
+    if (error) throw supabaseError(error, "保存轨迹失败");
+    return data;
+  }
   return requestApi("/api/track-logs", { method: "POST", body: JSON.stringify(log) });
 }
 
 export async function importDemoData() {
   if (isLocalDataMode) return writeLocalState(createDemoState());
+  if (isSupabaseDataMode) {
+    const demo = createDemoState();
+    await supabase.from("point_photos").delete().in("point_id", demo.points.map((point) => point.id));
+    await supabase.from("dispatch_tasks").delete().in("point_id", demo.points.map((point) => point.id));
+    await supabase.from("projects").upsert(demo.projects.filter((project) => project.id !== "all").map(buildSupabaseProjectPayload), { onConflict: "id" });
+    await supabase.from("workers").upsert(demo.workers.map(buildSupabaseWorkerPayload), { onConflict: "id" });
+    await supabase.from("wall_points").upsert(demo.points.map(buildSupabasePointPayload), { onConflict: "id" });
+    return supabaseState();
+  }
   return normalizeState(await requestApi("/api/import-demo", { method: "POST", body: JSON.stringify({}) }));
 }
 
 export async function resetDemoData() {
   if (isLocalDataMode) return writeLocalState(createDemoState());
+  if (isSupabaseDataMode) return importDemoData();
   return normalizeState(await requestApi("/api/reset-demo", { method: "POST", body: JSON.stringify({}) }));
 }
 
@@ -1062,7 +1473,11 @@ export const proxyApi = {
   },
   async loadState() {
     if (isLocalDataMode) return readLocalState();
+    if (isSupabaseDataMode) return supabaseState();
     return remoteState();
+  },
+  async loadDemoState() {
+    return createDemoState();
   },
   async seedDemo() {
     return importDemoData();

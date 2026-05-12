@@ -353,6 +353,7 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     const appSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "App.jsx"), "utf8");
     const hookSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "hooks", "useH5Data.js"), "utf8");
     const apiSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "apiClient.js"), "utf8");
+    const supabaseSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "supabaseClient.js"), "utf8");
     const domainSource = fs.readFileSync(path.resolve(__dirname, "..", "..", "src", "lib", "domain.js"), "utf8");
 
     expect(appSource).not.toContain("setWorkerPointTasks");
@@ -364,6 +365,9 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     expect(apiSource).not.toMatch(/192[.]168[.]/);
     expect(apiSource).not.toMatch(/hostname[}]:8787/);
     expect(apiSource).toContain('requestApi("/api/dispatch"');
+    expect(apiSource).toContain("isSupabaseDataMode");
+    expect(supabaseSource).toContain("VITE_SUPABASE_URL");
+    expect(supabaseSource).toContain("VITE_SUPABASE_ANON_KEY");
     expect(domainSource).toContain("VITE_PUBLIC_APP_ORIGIN");
     expect(domainSource).toContain("buildWorkerUrl");
   });
