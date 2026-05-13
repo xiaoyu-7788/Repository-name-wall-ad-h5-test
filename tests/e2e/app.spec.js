@@ -134,13 +134,13 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     await page.getByLabel("关闭").click();
 
     await page.getByRole("button", { name: "查看", exact: true }).click();
-    await expect(page.locator(".modal-card")).toContainText("TEST-NO-K-001");
-    await expect(page.locator(".modal-card")).toContainText("K码");
-    await expect(page.locator(".modal-card")).toContainText("未登记");
+    await expect(page.locator(".detailModal")).toContainText("TEST-NO-K-001");
+    await expect(page.locator(".detailModal")).toContainText("K码");
+    await expect(page.locator(".detailModal")).toContainText("未登记");
     await expect(page.locator(".drawer-panel")).toHaveCount(0);
     await expect(page.locator(".pointTableWrap")).toBeVisible();
-    await page.locator(".modal-card").getByLabel("关闭").click();
-    await expect(page.locator(".modal-card")).toHaveCount(0);
+    await page.locator(".detailModal").getByLabel("关闭").click();
+    await expect(page.locator(".detailModal")).toHaveCount(0);
     await expect(page.locator(".pointTableWrap")).toBeVisible();
   });
 
