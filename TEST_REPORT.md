@@ -2436,3 +2436,23 @@ npm run test:e2e
 
 - `https://repository-name-wall-ad-h5-test.vercel.app/api/wall-points`
 - 返回：`ok = true`，`dataCount = 3`
+
+线上弹窗与列表实测补充：
+
+- 初始进入 `/admin/points`：
+  - `pointTableWrapCount = 1`
+  - `drawerCount = 0`
+  - `modalCount = 0`
+  - 行内操作按钮数量：
+    - `查看 = 3`
+    - `编辑 = 3`
+    - `更多 = 3`
+- 点击首行 `查看` 后：
+  - `modalCount = 1`
+  - `drawerCount = 0`
+  - `pointTableWrapCount = 1`
+  - 弹窗内包含 `K码`
+- 关闭弹窗后：
+  - `modalCount = 0`
+  - `drawerCount = 0`
+  - `pointTableWrapCount = 1`
