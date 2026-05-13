@@ -2382,3 +2382,57 @@ npm run test:e2e
 
 - `npm run build` 通过；仅有 Vite chunk 体积 warning，不影响部署。
 - `npm run test:e2e` 通过，11/11 passed。
+
+## 49. `/admin/points` 按参考稿收口新版点位管理实现
+
+更新时间：2026-05-13。
+
+本次严格只修改点位管理核心文件：
+
+- `src/pages/PointsPage.jsx`
+- `src/components/points/PointsTable.jsx`
+- `src/components/points/PointDetailDrawer.jsx`
+- `src/components/points/PointFilters.jsx`
+- `src/styles.css`
+
+本次处理结果：
+
+- `PointsPage` 现在正式使用 `PointFilters` 组件，不再在页面里手写旧筛选条。
+- `PointsTable` 行操作改为参考稿结构：
+  - 行内只显示 `查看 / 编辑 / 更多`
+  - `更多` 菜单中才显示 `现场查看 / 派单 / 素材 / 验收 / 删除`
+- `PointDetailDrawer` 虽保留原文件名，但实现已经是居中大弹窗，样式靠近参考稿 `detailModal`，不再使用右侧半屏 Drawer。
+- 地址列第一行显示地址，第二行显示 `K码：xxx`。
+- 点位编号只显示在“点位编号”列，不再显示到地址下面。
+
+字段显示确认：
+
+- 点位编号列：只显示点位编号。
+- 地址列：第一行地址，第二行 `K码：...`。
+- K码 兼容读取 `kCode / k_code / kcode / code_k` 对应的现有字段映射结果；无值时显示 `未登记`。
+
+本次验证命令：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，11 passed。
+
+生产环境 `/admin/points` 实际检查结果：
+
+1. 是否还存在右侧 Drawer：否
+2. 点击查看是否为居中大弹窗：是
+3. 地址下面是否显示 K码：是
+4. 点位编号是否只在点位编号列显示：是
+5. 行操作是否已经不是旧版胶囊按钮：是
+6. `/api/wall-points` 是否仍返回真实数据：是
+
+线上接口复查：
+
+- `https://repository-name-wall-ad-h5-test.vercel.app/api/wall-points`
+- 返回：`ok = true`，`dataCount = 3`

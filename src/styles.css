@@ -971,11 +971,13 @@ a {
 .pointTableWrap {
   overflow: visible;
   width: 100%;
+  padding: 12px;
 }
 
 .pointTableWrap .enterprise-table-wrap {
   width: 100%;
   overflow: visible;
+  border-radius: 20px;
 }
 
 .pointTable {
@@ -1037,10 +1039,33 @@ a {
 }
 
 .rowActions button {
-  min-height: 30px;
-  padding: 5px 8px;
-  border-radius: 9px;
-  font-size: 12px;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.pointRowActions {
+  justify-content: flex-end;
+}
+
+.primaryActionButton {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, .16);
+}
+
+.secondaryActionButton {
+  background: #fff;
+  color: #334155;
+  border-color: #d7dfeb;
+}
+
+.tertiaryActionButton {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #f1f5f9;
 }
 
 .pointActionMenu {
@@ -1051,13 +1076,13 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
-  padding: 5px 10px;
-  border: 1px solid #d9e2ef;
-  border-radius: 9px;
-  background: #fff;
-  color: #334155;
-  font-size: 12px;
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
   list-style: none;
@@ -1076,12 +1101,12 @@ a {
   top: calc(100% + 6px);
   right: 0;
   display: none;
-  width: 176px;
+  width: 188px;
   padding: 6px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 16px;
   background: #fff;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, .14);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, .18);
 }
 
 .pointActionMenu[open] .pointActionList {
@@ -1100,31 +1125,157 @@ a {
   margin-top: 0;
 }
 
-.pointDetailDrawer {
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+.pointDetailModal {
+  width: min(1180px, 94vw);
+  max-height: min(860px, 90vh);
+  overflow: hidden;
+  background: rgba(248, 250, 252, .96);
+  border: 1px solid rgba(255, 255, 255, .65);
+  border-radius: 28px;
+  padding: 22px;
+  box-shadow: 0 28px 90px rgba(15, 23, 42, .28);
+  animation: modalRise .22s ease-out;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
-.pointDetailHead {
+.pointDetailModalHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
+  border-radius: 22px;
+  padding: 18px 20px;
+}
+
+.pointDetailModalHeader small {
+  display: block;
+  color: #6b7a90;
+  margin-bottom: 6px;
+}
+
+.pointDetailModalHeader h2 {
+  margin: 0;
+}
+
+.pointDetailModalHeader p {
+  margin: 6px 0 0;
+  color: #6b7a90;
+}
+
+.pointDetailMeta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
 
-.pointDetailHead span {
+.pointDetailMeta span {
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
 }
 
-.pointDetailHead b {
-  color: #0f766e;
-  font-size: 13px;
+.pointDetailLayout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 18px;
+  margin-top: 18px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
-.pointDetailGrid div {
-  min-height: 72px;
+.pointDetailInfo,
+.pointDetailMedia,
+.pointRequiredPanel,
+.pointTimelinePanel {
+  background: #fff;
+  border-radius: 22px;
+  padding: 20px;
+}
+
+.pointDetailInfo {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  position: sticky;
+  top: 0;
+  height: max-content;
+}
+
+.detailBlockTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detailBlockTitle span {
+  background: #dbeafe;
+  color: #2563eb;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.pointDetailInfo > div:not(.detailBlockTitle) {
+  background: #f6f8fc;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.pointDetailInfo span {
+  display: block;
+  color: #6b7a90;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.pointDetailMain {
+  display: grid;
+  gap: 18px;
+}
+
+.pointDetailMetrics {
+  display: grid;
+  grid-template-columns: 1fr .75fr 1fr;
+  gap: 14px;
+}
+
+.pointDetailMetrics article {
+  background: #fff;
+  border-radius: 20px;
+  padding: 18px;
+}
+
+.pointDetailMetrics span,
+.pointDetailMetrics small {
+  display: block;
+  color: #6b7a90;
+}
+
+.pointDetailMetrics b {
+  display: block;
+  font-size: 22px;
+  margin: 8px 0;
+}
+
+.pointDetailMetrics em {
+  display: block;
+  height: 8px;
+  background: #e8eef7;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.pointDetailMetrics i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb, #22c55e);
 }
 
 .pointMediaStrip {
@@ -1144,26 +1295,10 @@ a {
 }
 
 .pointDetailActions {
-  margin-top: 8px;
-}
-
-.points-final-page {
-  display: grid;
-  gap: 16px;
-}
-
-.points-final-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: 16px;
-  align-items: stretch;
-  padding: 20px 22px;
-  border: 1px solid var(--line);
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, .10), transparent 34%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: var(--shadow);
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .points-final-title {

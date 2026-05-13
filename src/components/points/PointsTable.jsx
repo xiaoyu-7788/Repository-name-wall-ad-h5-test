@@ -146,11 +146,11 @@ export function PointsTable({
                     </div>
                   </td>
                   <td onClick={(event) => event.stopPropagation()}>
-                    <div className="rowActions">
-                      <button type="button" onClick={() => onView(point)}>查看详情</button>
-                      <button type="button" onClick={() => onEdit(point)}>编辑</button>
+                    <div className="rowActions pointRowActions">
+                      <button className="primaryActionButton" type="button" onClick={() => onView(point)}>查看</button>
+                      <button className="secondaryActionButton" type="button" onClick={() => onEdit(point)}>编辑</button>
                       <details className="pointActionMenu">
-                        <summary>更多</summary>
+                        <summary className="tertiaryActionButton">更多</summary>
                         <div className="pointActionList">
                           <button type="button" onClick={(event) => runMenuAction(event, () => onSite(point))}>现场查看</button>
                           <button type="button" onClick={(event) => runMenuAction(event, () => onDispatch(point))}>派单</button>
