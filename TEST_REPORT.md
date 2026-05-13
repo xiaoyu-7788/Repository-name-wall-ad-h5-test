@@ -2537,3 +2537,58 @@ npm run test:e2e
 3. 弹窗 header 不被裁切：是
 4. 内容区内部滚动，背景页面不滚动：是
 5. 无横向滚动条：是
+
+## 51. `/admin/points` 详情弹窗改为 createPortal 全局挂载
+
+更新时间：2026-05-13。
+
+本次只处理点位详情弹窗挂载层级与全屏遮罩问题。
+
+本次真实代码改动：
+
+- `src/components/points/PointDetailDrawer.jsx`
+- `src/styles.css`
+
+代码层确认：
+
+- `PointDetailDrawer` 已引入：
+  - `import { createPortal } from "react-dom";`
+- 组件不再直接在 `PointsPage` 内部 return overlay。
+- 当前实现为：
+  - 先构造 `const modal = (...)`
+  - 再 `return createPortal(modal, document.body);`
+- 因此 `detailOverlay` 已真正挂载到 `document.body`，不再留在 `points-page / page-fade / enterprise-main` 内部。
+
+本次样式确认：
+
+- `detailOverlay` 已改为真正全屏：
+  - `position: fixed`
+  - `inset: 0`
+  - `z-index: 9999`
+  - `width: 100vw`
+  - `height: 100vh`
+  - `overflow: hidden`
+- `pointDetailModal` 已改为：
+  - `width: min(1280px, calc(100vw - 48px))`
+  - `height: calc(100vh - 48px)`
+  - `max-height: calc(100vh - 48px)`
+  - `display: grid`
+  - `grid-template-rows: auto minmax(0, 1fr)`
+- `pointDetailModalBody / pointDetailLayout / pointDetailMain` 已调整为真正撑满剩余高度并内部滚动。
+
+本次验证命令：
+
+```bash
+git show --name-only --oneline -1
+grep -n "createPortal" src/components/points/PointDetailDrawer.jsx
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `grep -n "createPortal" src/components/points/PointDetailDrawer.jsx` 已能看到：
+  - `import { createPortal } from "react-dom";`
+  - `return createPortal(modal, document.body);`
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，11 passed。

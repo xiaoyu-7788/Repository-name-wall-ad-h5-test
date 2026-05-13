@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 import {
   amapMarkerUrl,
@@ -38,7 +39,7 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
   const completion = pointMaterialCompletion(point, photos, projects);
   const ready = isPointReadyForAcceptance(point, photos, projects);
 
-  return (
+  const modal = (
     <div className="detailOverlay" role="dialog" aria-modal="true">
       <button className="detailOverlayScrim" type="button" aria-label="关闭详情弹窗" onClick={onClose} />
       <section className="detailModal pointDetailModal">
@@ -141,4 +142,6 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
       </section>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }

@@ -1128,11 +1128,13 @@ a {
 .detailOverlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 9999;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 36px 28px;
+  padding: 24px;
   background: rgba(15, 23, 42, .45);
   backdrop-filter: blur(8px);
   overflow: hidden;
@@ -1150,16 +1152,17 @@ a {
 .pointDetailModal {
   position: relative;
   z-index: 1;
-  width: min(1180px, calc(100vw - 360px));
-  min-width: 960px;
-  height: calc(100vh - 72px);
-  max-height: calc(100vh - 72px);
+  width: min(1280px, calc(100vw - 48px));
+  min-width: 0;
+  height: calc(100vh - 48px);
+  max-height: calc(100vh - 48px);
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   border-radius: 28px;
   background: #f8fafc;
   box-shadow: 0 28px 90px rgba(15, 23, 42, .28);
+  overflow-x: hidden;
 }
 
 .pointDetailModalHeader {
@@ -1173,7 +1176,7 @@ a {
   border-radius: 22px;
   padding: 18px 20px;
   flex-shrink: 0;
-  margin: 18px 18px 0;
+  margin: 0;
 }
 
 .pointDetailModalHeader small {
@@ -1222,17 +1225,17 @@ a {
 
 .pointDetailModalBody {
   min-height: 0;
-  flex: 1;
-  overflow-y: auto;
+  height: 100%;
+  overflow: hidden;
   overflow-x: hidden;
-  padding: 18px 18px 18px;
+  padding: 18px;
 }
 
 .pointDetailLayout {
-  display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 18px;
   height: 100%;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 18px;
   min-height: 0;
   overflow: hidden;
   overflow-x: hidden;
@@ -1254,6 +1257,7 @@ a {
   align-content: start;
   position: sticky;
   top: 0;
+  min-height: 0;
   max-height: 100%;
   overflow: auto;
   min-width: 0;
@@ -1295,7 +1299,7 @@ a {
   min-width: 0;
   min-height: 0;
   height: 100%;
-  overflow: auto;
+  overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
 }
@@ -1364,8 +1368,9 @@ a {
   flex-wrap: wrap;
   gap: 10px;
   min-width: 0;
-  background: #fff;
-  border-radius: 22px;
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(248,250,252,.72), #f8fafc 42%);
   padding: 18px 20px;
 }
 
@@ -4785,6 +4790,23 @@ button:hover,
   }
 }
 
+@media (max-width: 1200px) {
+  .detailOverlay {
+    padding: 12px;
+  }
+
+  .pointDetailModal {
+    width: calc(100vw - 24px);
+    min-width: 0;
+    height: calc(100vh - 24px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .pointDetailLayout {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 760px) {
   .kpi-grid,
   .health-grid,
@@ -4848,26 +4870,11 @@ button:hover,
     width: 100vw;
   }
 
-  .detailOverlay {
-    padding: 16px;
-  }
-
-  .pointDetailModal {
-    width: calc(100vw - 32px);
-    min-width: 0;
-    height: calc(100vh - 32px);
-    max-height: calc(100vh - 32px);
-  }
-
   .pointDetailModalHeader,
   .pointDetailModalBody,
   .pointDetailActions {
     padding-left: 16px;
     padding-right: 16px;
-  }
-
-  .pointDetailLayout {
-    grid-template-columns: 1fr;
   }
 
   .pointDetailHeaderAside {
