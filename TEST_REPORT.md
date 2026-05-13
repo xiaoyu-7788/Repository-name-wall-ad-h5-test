@@ -2506,3 +2506,23 @@ npm run test:e2e
 
 - `npm run build`：通过。
 - `npm run test:e2e`：通过，11 passed。
+
+线上 `/admin/points` 实测结果：
+
+- 初始进入页面：
+  - `pointTableWrapCount = 1`
+  - `drawerCount = 0`
+  - `detailModalCount = 0`
+- 点击首行 `查看` 后：
+  - `detailOverlayCount = 1`
+  - `detailModalCount = 1`
+  - `drawerCount = 0`
+  - `pointTableWrapCount = 1`
+  - 弹窗内可见：`点位编号`、`K码`、`项目`、`素材概览/素材完成度`
+- 关闭后：
+  - `detailModalCount = 0`
+  - `drawerCount = 0`
+  - `pointTableWrapCount = 1`
+- `/api/wall-points` 线上返回：
+  - `ok = true`
+  - `dataCount = 3`
