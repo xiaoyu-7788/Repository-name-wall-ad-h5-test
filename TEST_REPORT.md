@@ -2482,17 +2482,20 @@ npm run test:e2e
   - 背景遮罩 + 模糊
   - `overflow: hidden`
 - 弹窗本体改为：
-  - `width: min(1120px, calc(100vw - 96px))`
-  - `max-height: calc(100vh - 96px)`
+  - `width: min(1180px, calc(100vw - 360px))`
+  - `min-width: 960px`
+  - `height: calc(100vh - 72px)`
+  - `max-height: calc(100vh - 72px)`
   - `overflow: hidden`
   - 头部固定，内容区单独滚动
 - 内容区改为：
   - `overflow-y: auto`
   - `overflow-x: hidden`
   - 各主区块 `min-width: 0`
+  - `detailLayout / detailMain / detailInfo` 使用 `min-height: 0`
 - 小屏幕下：
-  - `detailOverlay` 改为 16px padding
-  - `detailModal` 改为 `calc(100vw - 32px)`
+  - `detailOverlay` 改为 12px padding
+  - `detailModal` 改为 `calc(100vw - 24px)`
   - `detailLayout` 自动切成单列
 
 本次验证命令：
@@ -2526,3 +2529,11 @@ npm run test:e2e
 - `/api/wall-points` 线上返回：
   - `ok = true`
   - `dataCount = 3`
+
+本轮结论：
+
+1. 点位详情弹窗高度已改为准全屏：是
+2. 弹窗底部不再出现大片遮罩留白：是
+3. 弹窗 header 不被裁切：是
+4. 内容区内部滚动，背景页面不滚动：是
+5. 无横向滚动条：是
