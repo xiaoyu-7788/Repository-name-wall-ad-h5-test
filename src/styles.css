@@ -1132,7 +1132,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 48px;
+  padding: 36px 28px;
   background: rgba(15, 23, 42, .45);
   backdrop-filter: blur(8px);
   overflow: hidden;
@@ -1150,13 +1150,15 @@ a {
 .pointDetailModal {
   position: relative;
   z-index: 1;
-  width: min(1120px, calc(100vw - 96px));
-  max-height: calc(100vh - 96px);
+  width: min(1180px, calc(100vw - 360px));
+  min-width: 960px;
+  height: calc(100vh - 72px);
+  max-height: calc(100vh - 72px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   border-radius: 28px;
-  background: #fff;
+  background: #f8fafc;
   box-shadow: 0 28px 90px rgba(15, 23, 42, .28);
 }
 
@@ -1165,12 +1167,13 @@ a {
   justify-content: space-between;
   gap: 18px;
   align-items: flex-start;
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 2;
   background: #fff;
-  padding: 22px 24px 18px;
+  border-radius: 22px;
+  padding: 18px 20px;
   flex-shrink: 0;
+  margin: 18px 18px 0;
 }
 
 .pointDetailModalHeader small {
@@ -1188,6 +1191,17 @@ a {
   color: #6b7a90;
 }
 
+.pointDetailHeading,
+.pointDetailHeaderAside {
+  min-width: 0;
+}
+
+.pointDetailHeaderAside {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
 .pointDetailMeta {
   display: flex;
   flex-wrap: wrap;
@@ -1202,22 +1216,26 @@ a {
   font-weight: 700;
 }
 
+.pointDetailClose {
+  flex-shrink: 0;
+}
+
 .pointDetailModalBody {
   min-height: 0;
+  flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 24px 0;
+  padding: 18px 18px 18px;
 }
 
 .pointDetailLayout {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
   gap: 18px;
-  margin-top: 8px;
+  height: 100%;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
   overflow-x: hidden;
-  padding: 0 0 24px;
 }
 
 .pointDetailInfo,
@@ -1236,7 +1254,8 @@ a {
   align-content: start;
   position: sticky;
   top: 0;
-  height: max-content;
+  max-height: 100%;
+  overflow: auto;
   min-width: 0;
 }
 
@@ -1271,8 +1290,14 @@ a {
 
 .pointDetailMain {
   display: grid;
+  align-content: start;
   gap: 18px;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
 }
 
 .pointDetailMetrics {
@@ -1333,14 +1358,15 @@ a {
 }
 
 .pointDetailActions {
-  margin-top: 0;
+  margin-top: auto;
   display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 18px 24px 24px;
-  flex-shrink: 0;
   min-width: 0;
+  background: #fff;
+  border-radius: 22px;
+  padding: 18px 20px;
 }
 
 .points-final-title {
@@ -4828,6 +4854,8 @@ button:hover,
 
   .pointDetailModal {
     width: calc(100vw - 32px);
+    min-width: 0;
+    height: calc(100vh - 32px);
     max-height: calc(100vh - 32px);
   }
 
@@ -4840,6 +4868,11 @@ button:hover,
 
   .pointDetailLayout {
     grid-template-columns: 1fr;
+  }
+
+  .pointDetailHeaderAside {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .admin-shell {

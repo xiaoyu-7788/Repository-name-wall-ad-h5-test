@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 import {
   amapMarkerUrl,
@@ -18,6 +18,19 @@ import { StatusPill } from "../shared/StatusBadge";
 export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEdit, onSite, projects = [] }) {
   if (!point) return null;
 
+  useEffect(() => {
+    const { style: bodyStyle } = document.body;
+    const { style: htmlStyle } = document.documentElement;
+    const prevBodyOverflow = bodyStyle.overflow;
+    const prevHtmlOverflow = htmlStyle.overflow;
+    bodyStyle.overflow = "hidden";
+    htmlStyle.overflow = "hidden";
+    return () => {
+      bodyStyle.overflow = prevBodyOverflow;
+      htmlStyle.overflow = prevHtmlOverflow;
+    };
+  }, []);
+
   const mapped = getPointDisplayModel(point, { projects, tasks, workers });
   const media = pointMedia(point, photos);
   const counts = mediaCounts(point, photos);
@@ -30,15 +43,17 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
       <button className="detailOverlayScrim" type="button" aria-label="关闭详情弹窗" onClick={onClose} />
       <section className="detailModal pointDetailModal">
         <header className="pointDetailModalHeader">
-          <div>
+          <div className="pointDetailHeading">
             <small>点位详情 / Point Detail</small>
             <h2>{mapped.code}</h2>
             <p>{mapped.address}</p>
           </div>
-          <div className="pointDetailMeta">
-            <StatusPill status={getPointStatus(point)} />
-            <span>{ready ? "可验收" : "待补齐"}</span>
-            <button className="icon-button" type="button" onClick={onClose} aria-label="关闭">×</button>
+          <div className="pointDetailHeaderAside">
+            <div className="pointDetailMeta">
+              <StatusPill status={getPointStatus(point)} />
+              <span>{ready ? "可验收" : "待补齐"}</span>
+            </div>
+            <button className="icon-button pointDetailClose" type="button" onClick={onClose} aria-label="关闭">×</button>
           </div>
         </header>
         <div className="detailModalBody pointDetailModalBody">
@@ -114,15 +129,15 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
                   {!media.length && <small>暂无素材</small>}
                 </div>
               </section>
+              <section className="pointDetailActions">
+                <button type="button" onClick={() => onSite(point)}>现场查看</button>
+                <button type="button" onClick={() => onEdit(point)}>编辑点位</button>
+                <a href={amapMarkerUrl(point)} target="_blank" rel="noreferrer">高德查看</a>
+                <a className="blue-button" href={amapNavigationUrl(point)} target="_blank" rel="noreferrer">高德导航</a>
+              </section>
             </div>
           </div>
         </div>
-        <footer className="pointDetailActions">
-          <button type="button" onClick={() => onSite(point)}>现场查看</button>
-          <button type="button" onClick={() => onEdit(point)}>编辑点位</button>
-          <a href={amapMarkerUrl(point)} target="_blank" rel="noreferrer">高德查看</a>
-          <a className="blue-button" href={amapNavigationUrl(point)} target="_blank" rel="noreferrer">高德导航</a>
-        </footer>
       </section>
     </div>
   );
