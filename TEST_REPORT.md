@@ -2456,3 +2456,53 @@ npm run test:e2e
   - `modalCount = 0`
   - `drawerCount = 0`
   - `pointTableWrapCount = 1`
+
+## 50. `/admin/points` 详情弹窗尺寸与滚动修复
+
+更新时间：2026-05-13。
+
+本次只继续修复点位详情弹窗的尺寸、定位和滚动，不改列表页、接口和数据逻辑。
+
+本次修改文件：
+
+- `src/components/points/PointDetailDrawer.jsx`
+- `src/styles.css`
+
+本次处理内容：
+
+- 点位详情不再依赖通用 `.modal-card` 尺寸，而是独立使用：
+  - `detailOverlay`
+  - `detailOverlayScrim`
+  - `detailModal`
+  - `detailModalBody`
+- 弹窗层改为：
+  - `position: fixed`
+  - `inset: 0`
+  - 居中显示
+  - 背景遮罩 + 模糊
+  - `overflow: hidden`
+- 弹窗本体改为：
+  - `width: min(1120px, calc(100vw - 96px))`
+  - `max-height: calc(100vh - 96px)`
+  - `overflow: hidden`
+  - 头部固定，内容区单独滚动
+- 内容区改为：
+  - `overflow-y: auto`
+  - `overflow-x: hidden`
+  - 各主区块 `min-width: 0`
+- 小屏幕下：
+  - `detailOverlay` 改为 16px padding
+  - `detailModal` 改为 `calc(100vw - 32px)`
+  - `detailLayout` 自动切成单列
+
+本次验证命令：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build`：通过。
+- `npm run test:e2e`：通过，11 passed。
