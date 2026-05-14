@@ -111,6 +111,8 @@ export function MediaPage({ data, activeProject, timeRange = "最近7天", globa
     };
   }, [scopedPoints, data.photos, data.tasks, data.projects]);
 
+  const previewRows = materialSummary.rows.slice(0, 6);
+
   function exportList() {
     const blob = new Blob([safeJson(visible)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -254,12 +256,78 @@ export function MediaPage({ data, activeProject, timeRange = "最近7天", globa
             <h3>表格与卡片混合视图</h3>
           </div>
         </div>
-        <div className="media-center-grid">
-          {visible.map((photo) => {
-            const point = data.points.find((item) => item.id === (photo.point_id || photo.pointId));
-            return <MediaCard key={photo.id} photo={photo} point={point} onPreview={(p, currentPoint) => setPreview({ photo: p, point: currentPoint })} />;
-          })}
-        </div>
+        {visible.length ? (
+          <div className="media-center-grid">
+            {visible.map((photo) => {
+              const point = data.points.find((item) => item.id === (photo.point_id || photo.pointId));
+              return <MediaCard key={photo.id} photo={photo} point={point} onPreview={(p, currentPoint) => setPreview({ photo: p, point: currentPoint })} />;
+            })}
+          </div>
+        ) : (
+          <div className="empty-state media-empty-state">
+            <span>◷</span>
+            <b>暂无素材，建议先导入点位或等待师傅端上传</b>
+            <p>当前筛选范围内还没有现场照片、全景、水印、协议或视频素材。可以先回到点位管理或派单中心推进流程。</p>
+            <div className="media-preview-actions">
+              <button type="button" onClick={downloadArchiveManifest}>导出清单</button>
+              <button type="button" onClick={exportList}>刷新列表</button>
+              <button type="button" className="blue-button" onClick={() => window.location.assign('/admin/points')}>查看点位</button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="enterprise-two-column media-workspace">
+        <section className="enterprise-card media-status-table">
+          <div className="enterprise-card-header">
+            <div>
+              <span>点位素材状态</span>
+              <h3>待补齐与无素材点位</h3>
+            </div>
+          </div>
+          <div className="enterprise-list-grid">
+            {previewRows.map((row) => (
+              <article key={row.point.id} className="enterprise-list-row">
+                <div>
+                  <b>{row.point.title}</b>
+                  <small>{getProjectName(row.point)}</small>
+                  <small>{row.status} · 缺失 {row.missing.join("、") || "无"}</small>
+                </div>
+                <span className="status-chip">{row.counts.total} 份</span>
+              </article>
+            ))}
+            {!previewRows.length && <div className="enterprise-empty">当前没有待分析的点位素材状态。</div>}
+          </div>
+        </section>
+
+        <section className="enterprise-card media-preview-panel">
+          <div className="enterprise-card-header">
+            <div>
+              <span>上传建议</span>
+              <h3>素材补齐提示</h3>
+            </div>
+          </div>
+          <div className="enterprise-list-grid">
+            <article className="enterprise-list-row">
+              <div>
+                <b>现场照片</b>
+                <small>建议优先上传现场照片与施工环境图，作为后续验收基础。</small>
+              </div>
+            </article>
+            <article className="enterprise-list-row">
+              <div>
+                <b>720 全景与水印照片</b>
+                <small>统一按项目素材规则补齐，便于在点位管理和项目管理中判断齐套率。</small>
+              </div>
+            </article>
+            <article className="enterprise-list-row">
+              <div>
+                <b>视频与协议</b>
+                <small>视频与墙租协议图片建议在完工前上传，避免点位进入待复查。</small>
+              </div>
+            </article>
+          </div>
+        </section>
       </section>
 
       {preview && (

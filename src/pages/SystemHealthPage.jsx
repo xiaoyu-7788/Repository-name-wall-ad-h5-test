@@ -72,7 +72,7 @@ export function SystemHealthPage({ data, onRunDiagnosis }) {
         ))}
       </section>
 
-      <section className="enterprise-two-column">
+      <section className="enterprise-two-column system-workspace">
         <section className="enterprise-card">
           <div className="enterprise-card-header">
             <div>
@@ -92,7 +92,7 @@ export function SystemHealthPage({ data, onRunDiagnosis }) {
         <KimiConfig />
       </section>
 
-      <section className="enterprise-two-column">
+      <section className="enterprise-two-column system-workspace">
         <StabilityCheck />
         <section className="enterprise-card diagnosis-card">
           <div className="enterprise-card-header">

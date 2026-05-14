@@ -64,7 +64,7 @@ export function MapSidebar({
   }
 
   return (
-    <aside className="enterprise-card enterprise-sidebar-panel map-side-panel">
+    <aside className="enterprise-sidebar-panel map-side-panel">
       <div className="map-side-tabs">
         {tabs.map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}
       </div>

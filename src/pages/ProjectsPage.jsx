@@ -107,37 +107,7 @@ export function ProjectsPage({ data, projects, activeProject, setActiveProject, 
         <article><span>异常点位</span><b>{summary.risks}</b><small>需优先处理</small></article>
       </section>
 
-      <section className="enterprise-layout enterprise-two-column">
-        <form className="enterprise-card project-editor-card" onSubmit={save}>
-          <div className="enterprise-card-header">
-            <div>
-              <span>项目编辑</span>
-              <h3>{draft.id ? "编辑项目" : "新建项目"}</h3>
-            </div>
-          </div>
-          <div className="project-form-grid">
-            <label><span>项目名称</span><input required value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="例如：加多宝村镇墙体项目" /></label>
-            <label><span>客户</span><input value={draft.client || ""} onChange={(event) => setDraft((current) => ({ ...current, client: event.target.value }))} placeholder="客户名称" /></label>
-            <label><span>月份</span><input value={draft.month || ""} onChange={(event) => setDraft((current) => ({ ...current, month: event.target.value }))} placeholder="2026-05" /></label>
-            <label><span>项目颜色</span><input type="color" value={draft.color || "#2563eb"} onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))} /></label>
-          </div>
-          <div className="material-rule-editor">
-            <b>素材必传规则</b>
-            <div>
-              {MEDIA_TABS.map((rule) => (
-                <label key={rule} className={draft.materialRules?.includes(rule) ? "active" : ""}>
-                  <input type="checkbox" checked={draft.materialRules?.includes(rule)} onChange={() => toggleRule(rule)} />
-                  {rule}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="drawer-actions">
-            <button type="button" onClick={() => setDraft(emptyDraft)}>清空</button>
-            <button className="blue-button" type="submit">保存项目</button>
-          </div>
-        </form>
-
+      <section className="enterprise-layout enterprise-two-column project-page-layout">
         <section className="enterprise-card project-list-panel">
           <div className="enterprise-card-header">
             <div>
@@ -187,6 +157,36 @@ export function ProjectsPage({ data, projects, activeProject, setActiveProject, 
             {!projectRows.length && <div className="enterprise-empty">暂无项目，或筛选条件过窄。</div>}
           </div>
         </section>
+
+        <form className="enterprise-card project-editor-card" onSubmit={save}>
+          <div className="enterprise-card-header">
+            <div>
+              <span>项目编辑</span>
+              <h3>{draft.id ? "编辑项目" : "新建项目"}</h3>
+            </div>
+          </div>
+          <div className="project-form-grid">
+            <label><span>项目名称</span><input required value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="例如：加多宝村镇墙体项目" /></label>
+            <label><span>客户</span><input value={draft.client || ""} onChange={(event) => setDraft((current) => ({ ...current, client: event.target.value }))} placeholder="客户名称" /></label>
+            <label><span>月份</span><input value={draft.month || ""} onChange={(event) => setDraft((current) => ({ ...current, month: event.target.value }))} placeholder="2026-05" /></label>
+            <label><span>项目颜色</span><input type="color" value={draft.color || "#2563eb"} onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))} /></label>
+          </div>
+          <div className="material-rule-editor">
+            <b>素材必传规则</b>
+            <div>
+              {MEDIA_TABS.map((rule) => (
+                <label key={rule} className={draft.materialRules?.includes(rule) ? "active" : ""}>
+                  <input type="checkbox" checked={draft.materialRules?.includes(rule)} onChange={() => toggleRule(rule)} />
+                  {rule}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="drawer-actions">
+            <button type="button" onClick={() => setDraft(emptyDraft)}>清空</button>
+            <button className="blue-button" type="submit">保存项目</button>
+          </div>
+        </form>
       </section>
     </div>
   );

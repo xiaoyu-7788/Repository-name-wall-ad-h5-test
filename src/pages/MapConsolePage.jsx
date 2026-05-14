@@ -134,6 +134,15 @@ export function MapConsolePage({
     { label: "区域异常", value: areaSummary.abnormal, hint: "拖拽选区后更新" },
   ];
 
+  const queueStats = [
+    { label: "待派单", value: filteredPoints.filter((point) => getPointStatus(point) === "待派单").length },
+    { label: "赶往中", value: filteredPoints.filter((point) => getPointStatus(point) === "已派单").length },
+    { label: "施工中", value: filteredPoints.filter((point) => getPointStatus(point) === "施工中").length },
+    { label: "待补素材", value: filteredPoints.filter((point) => getPointStatus(point) === "已上传素材").length },
+    { label: "异常", value: filteredPoints.filter((point) => getPointAnomalies(point, data.photos, data.tasks, data.projects).length > 0).length },
+    { label: "待验收", value: filteredPoints.filter((point) => getPointStatus(point) === "待验收").length },
+  ];
+
   return (
     <div className="map-console-page enterprise-page">
       <header className="enterprise-page-header">
@@ -188,6 +197,47 @@ export function MapConsolePage({
       </section>
 
       <section className="enterprise-three-column enterprise-map-layout map-console-layout">
+        <section className="enterprise-card map-queue-panel">
+          <div className="enterprise-card-header">
+            <div>
+              <span>调度队列</span>
+              <h3>点位池与状态分布</h3>
+            </div>
+          </div>
+          <div className="mapQueueSummary">
+            {queueStats.map((item) => (
+              <article key={item.label}>
+                <span>{item.label}</span>
+                <b>{item.value}</b>
+              </article>
+            ))}
+          </div>
+          <div className="mapQueueList">
+            {filteredPoints.map((point) => (
+              <button
+                key={point.id}
+                type="button"
+                className={`mapQueueRow ${selectedPoint?.id === point.id ? "active" : ""}`}
+                onClick={() => {
+                  setSelectedPointId(point.id);
+                  setSideTab("点位详情");
+                }}
+              >
+                <div className="mapQueueRowTop">
+                  <b>{point.title}</b>
+                  <span className="status-chip">{getPointStatus(point)}</span>
+                </div>
+                <small>{getProjectName(point)}</small>
+                <small>{point.address}</small>
+                <div className="mapQueueActions">
+                  <span>{getPointAnomalies(point, data.photos, data.tasks, data.projects).length ? "有异常" : "正常"}</span>
+                  <span>{selectedIds.includes(point.id) ? "已选中" : "未选中"}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+
         <section className="enterprise-card">
           <div className="enterprise-card-header">
             <div>
@@ -222,11 +272,11 @@ export function MapConsolePage({
           />
         </section>
 
-        <section className="enterprise-card">
+        <section className="enterprise-card map-detail-panel">
           <div className="enterprise-card-header">
             <div>
-              <span>队列与汇总</span>
-              <h3>左侧点位池</h3>
+              <span>当前详情</span>
+              <h3>点位与师傅状态</h3>
             </div>
           </div>
           <MapSidebar
