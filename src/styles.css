@@ -661,8 +661,8 @@ a {
 }
 
 .enterprise-map-layout {
-  grid-template-columns: 320px minmax(0, 1fr) 360px;
-  min-height: calc(100vh - 260px);
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  min-height: calc(100vh - 220px);
   align-items: stretch;
 }
 
@@ -673,17 +673,17 @@ a {
 
 .map-queue-panel,
 .map-detail-panel {
-  min-height: calc(100vh - 260px);
+  min-height: calc(100vh - 220px);
 }
 
 .map-queue-panel .mapQueueList,
 .map-detail-panel .map-side-content {
-  max-height: calc(100vh - 420px);
+  max-height: calc(100vh - 360px);
   overflow: auto;
 }
 
 .map-queue-panel .mapQueueList {
-  max-height: calc(100vh - 430px);
+  max-height: calc(100vh - 370px);
 }
 
 .map-detail-panel {
@@ -1300,7 +1300,7 @@ a {
 }
 
 .map-console-canvas {
-  height: 100%;
+  height: calc(100vh - 320px);
   min-height: 0;
 }
 
@@ -3635,7 +3635,7 @@ button:hover,
 .amap-shell {
   position: relative;
   overflow: hidden;
-  min-height: 580px;
+  min-height: 620px;
   border: 1px solid #d9e2ef;
   border-radius: 24px;
   background: #eaf1fa;
@@ -3646,8 +3646,8 @@ button:hover,
   position: relative;
   z-index: 1;
   width: 100%;
-  height: 580px;
-  min-height: 580px;
+  height: 100%;
+  min-height: 620px;
 }
 
 .amap-shell.fallback-active .amap-real-board {
