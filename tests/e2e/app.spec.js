@@ -273,13 +273,60 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
   });
 
   test("地图调度保留点位 marker、小车 marker 与右侧 Tabs", async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 980 });
     await resetDemoData(page);
     await goPage(page, "地图调度 Map Console", "地图调度");
     await expect(page.locator(".amap-shell")).toBeVisible();
-    const mapBox = await page.locator('[data-testid="map-main-canvas"]').boundingBox();
+    await expect(page.locator(".mapMain > .mapTopStats, .mapMain > .mapCompactStats, .mapMain > .summary")).toHaveCount(0);
+    await expect(page.locator(".mapCompactStats")).toHaveCount(0);
+    await expect(page.locator(".mapQueuePanel .mapQueueMiniStats")).toBeVisible();
+    expect(await page.evaluate(() => {
+      const banned = ["当前筛选点位", "已派出点位", "区域异常"];
+      const topSections = Array.from(document.querySelectorAll(".mapMain > section:not(.mapDispatchLayout)"));
+      return topSections.every((section) => {
+        const topText = section.textContent || "";
+        const hasBannedPhrase = banned.some((text) => topText.includes(text));
+        const hasStandaloneOnlineWorker = Array.from(section.childNodes).some((node) => node.textContent?.trim() === "在线师傅");
+        return !hasBannedPhrase && !hasStandaloneOnlineWorker;
+      });
+    })).toBe(true);
+    expect(await page.evaluate(() => {
+      const banned = ["当前筛选点位", "已派出点位", "区域异常"];
+      const root = document.querySelector(".mapMain");
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const offenders = [];
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const text = node.textContent || "";
+        const hasBannedPhrase = banned.some((item) => text.includes(item));
+        const hasStandaloneOnlineWorker = text.trim() === "在线师傅";
+        if ((hasBannedPhrase || hasStandaloneOnlineWorker) && !node.parentElement?.closest(".mapQueuePanel")) {
+          offenders.push(text.trim());
+        }
+      }
+      return offenders;
+    })).toEqual([]);
+    const toolbarBox = await page.locator(".map-toolbar").boundingBox();
+    let dispatchBox = await page.locator(".mapDispatchLayout").boundingBox();
+    expect(toolbarBox).toBeTruthy();
+    expect(dispatchBox).toBeTruthy();
+    expect(dispatchBox.y - (toolbarBox.y + toolbarBox.height)).toBeLessThanOrEqual(16);
+    expect(dispatchBox.height).toBeGreaterThanOrEqual(600);
+    const mainCanvas = page.locator('[data-testid="map-main-canvas"]');
+    let mapBox = await mainCanvas.boundingBox();
     expect(mapBox).toBeTruthy();
-    expect(mapBox.width).toBeGreaterThan(700);
-    expect(mapBox.height).toBeGreaterThan(520);
+    expect(mapBox.width).toBeGreaterThanOrEqual(700);
+    expect(mapBox.height).toBeGreaterThanOrEqual(520);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+    await page.setViewportSize({ width: 1366, height: 900 });
+    dispatchBox = await page.locator(".mapDispatchLayout").boundingBox();
+    expect(dispatchBox).toBeTruthy();
+    expect(dispatchBox.height).toBeGreaterThanOrEqual(520);
+    mapBox = await mainCanvas.boundingBox();
+    expect(mapBox).toBeTruthy();
+    expect(mapBox.width).toBeGreaterThanOrEqual(700);
+    expect(mapBox.height).toBeGreaterThanOrEqual(520);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
     await expect(page.locator(".mapDetailPanel [data-testid=\"map-main-canvas\"]")).toHaveCount(0);
     await expect(page.locator(".amap-map-badges")).toContainText("点位");
     await expect(page.locator(".amap-map-badges")).toContainText("小车");

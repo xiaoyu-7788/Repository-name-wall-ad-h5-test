@@ -127,11 +127,19 @@ export function MapConsolePage({
     setSideTab("区域汇总");
   }
 
-  const mapSummaryCards = [
-    { label: "当前筛选点位", value: filteredPoints.length, hint: "按项目/状态/异常联动" },
-    { label: "已选点位", value: selectedIds.length, hint: "可直接批量派单" },
-    { label: "在线师傅", value: activeWorkers.filter(isWorkerOnline).length, hint: "含可接单队伍" },
-    { label: "区域异常", value: areaSummary.abnormal, hint: "拖拽选区后更新" },
+  const dispatchedPointCount = filteredPoints.filter((point) => (
+    data.tasks.some((task) => String(taskPointId(task)) === String(point.id))
+  )).length;
+  const onlineWorkerCount = activeWorkers.filter(isWorkerOnline).length;
+  const abnormalPointCount = filteredPoints.filter((point) => (
+    getPointAnomalies(point, data.photos, data.tasks, data.projects).length > 0
+  )).length;
+
+  const queueMiniStats = [
+    { label: "待处理", value: filteredPoints.length },
+    { label: "已派出", value: dispatchedPointCount },
+    { label: "在线", value: onlineWorkerCount },
+    { label: "异常", value: abnormalPointCount },
   ];
 
   const queueStats = [
@@ -144,8 +152,8 @@ export function MapConsolePage({
   ];
 
   return (
-    <div className="map-console-page enterprise-page">
-      <header className="enterprise-page-header">
+    <div className="mapMain map-console-page enterprise-page">
+      <header className="mapPageHeader enterprise-page-header">
         <div className="enterprise-page-title">
           <span>管理后台 / Map Console</span>
           <div className="enterprise-page-heading">地图调度</div>
@@ -155,16 +163,6 @@ export function MapConsolePage({
           <button type="button" onClick={() => setSideTab("派单")}>批量派单</button>
         </div>
       </header>
-
-      <section className="mapKpiStrip">
-        {mapSummaryCards.map((item) => (
-          <article key={item.label} className="enterprise-kpi-card mapKpiCard">
-            <span>{item.label}</span>
-            <b>{item.value}</b>
-            <small>{item.hint}</small>
-          </article>
-        ))}
-      </section>
 
       <section className="enterprise-card mapToolbarPanel">
         <MapToolbar
@@ -196,13 +194,21 @@ export function MapConsolePage({
         />
       </section>
 
-      <section className="mapDispatchShell map-console-layout">
+      <section className="mapDispatchLayout mapDispatchShell map-console-layout">
         <aside className="enterprise-card mapQueuePanel">
           <div className="enterprise-card-header">
             <div>
               <span>调度队列</span>
               <h3>待处理点位</h3>
             </div>
+          </div>
+          <div className="mapQueueMiniStats">
+            {queueMiniStats.map((item) => (
+              <div key={item.label}>
+                <span>{item.label}</span>
+                <b>{item.value}</b>
+              </div>
+            ))}
           </div>
           <div className="mapQueueSummary">
             {queueStats.map((item) => (
@@ -274,7 +280,7 @@ export function MapConsolePage({
           </div>
         </section>
 
-        <aside className="enterprise-card mapDetailPanel">
+        <aside className="enterprise-card mapSidePanel mapDetailPanel">
           <div className="enterprise-card-header">
             <div>
               <span>当前详情</span>
