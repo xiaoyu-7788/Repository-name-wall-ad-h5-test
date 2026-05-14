@@ -2,7 +2,7 @@ import React, { useState } from "react";
 
 import { getWorkerTeamTypeName, normalizeCarNo } from "../../apiClient";
 import { workerCarNo } from "../../lib/domain";
-import { Drawer } from "../shared/Drawer";
+import { Modal } from "../shared/Modal";
 import { Field } from "../shared/Field";
 
 export function WorkerFormDrawer({ worker, projects, onClose, onSave }) {
@@ -45,13 +45,13 @@ export function WorkerFormDrawer({ worker, projects, onClose, onSave }) {
   }
 
   return (
-    <Drawer title={editing ? "编辑师傅" : "新增师傅"} subtitle="用于公网派单、移动端访问和后台小车定位；正式师傅链接自动使用安全访问码。" onClose={onClose} width="620px">
-      <form className="worker-form drawer-form" onSubmit={submit}>
+    <Modal title={editing ? "编辑师傅" : "新增师傅"} subtitle="用于派单、移动端访问和定位同步。" onClose={onClose} wide>
+      <form className="worker-form worker-form-modal" onSubmit={submit}>
         {editing && <div className="mini-status">师傅 ID：{worker.id} · 当前车牌：{workerCarNo(worker)}</div>}
         <div className="worker-form-grid">
           <Field label="师傅姓名"><input required value={draft.name} onChange={(event) => update("name", event.target.value)} placeholder="张师傅" /></Field>
-          <Field label="手机号"><input required value={draft.phone || ""} onChange={(event) => update("phone", event.target.value)} placeholder="13800000001" /></Field>
-          <Field label="车辆编号"><input value={draft.carNo || ""} onChange={(event) => update("carNo", normalizeCarNo(event.target.value))} placeholder="粤A·工001" /></Field>
+          <Field label="手机号码"><input required value={draft.phone || ""} onChange={(event) => update("phone", event.target.value)} placeholder="13800000001" /></Field>
+          <Field label="车辆编号"><input value={draft.carNo || ""} onChange={(event) => update("carNo", normalizeCarNo(event.target.value))} placeholder="粤A·车001" /></Field>
           <Field label="内部编码"><input value={draft.workerKey || ""} onChange={(event) => update("workerKey", event.target.value)} placeholder="zhang" /></Field>
           <Field label="旧链接 slug"><input value={draft.slug || ""} onChange={(event) => update("slug", event.target.value)} placeholder="仅用于旧链接兼容" /></Field>
           <Field label="队伍类型">
@@ -81,6 +81,6 @@ export function WorkerFormDrawer({ worker, projects, onClose, onSave }) {
           <button className="blue-button" type="submit">{editing ? "保存师傅" : "新增师傅"}</button>
         </div>
       </form>
-    </Drawer>
+    </Modal>
   );
 }

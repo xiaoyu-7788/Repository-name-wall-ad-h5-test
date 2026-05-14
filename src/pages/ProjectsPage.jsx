@@ -19,13 +19,13 @@ export function ProjectsPage({ data, projects, activeProject, setActiveProject, 
   const [query, setQuery] = useState("");
 
   const monthOptions = useMemo(() => {
-    const months = [...new Set(projects.filter((project) => project.id !== "all").map((project) => project.month || "未设置年月"))];
+    const months = [...new Set(projects.filter((project) => project.id !== "all").map((project) => project.month || "未设置月份"))];
     return ["全部月份", ...months];
   }, [projects]);
 
   const projectRows = useMemo(() => projects
     .filter((project) => project.id !== "all")
-    .filter((project) => monthFilter === "全部月份" || (project.month || "未设置年月") === monthFilter)
+    .filter((project) => monthFilter === "全部月份" || (project.month || "未设置月份") === monthFilter)
     .filter((project) => {
       const haystack = `${project.name || ""} ${project.client || ""} ${project.month || ""}`.toLowerCase();
       return !query.trim() || haystack.includes(query.trim().toLowerCase());
@@ -80,26 +80,40 @@ export function ProjectsPage({ data, projects, activeProject, setActiveProject, 
     });
   }
 
+  const summary = {
+    total: projectRows.length,
+    active: projectRows.filter((project) => !project.hidden && !project.archived).length,
+    points: projectRows.reduce((sum, project) => sum + projectStats(project).points.length, 0),
+    risks: projectRows.reduce((sum, project) => sum + projectStats(project).risks, 0),
+  };
+
   return (
-    <div className="projects-page">
-      <section className="project-command-center">
-        <div>
-          <span>项目管理</span>
-          <h2>按月份、素材规则和执行进度管理项目</h2>
-          <p>项目规则会影响点位异常和素材齐套判断；切换当前项目后，地图、点位、素材和派单视图会同步过滤。</p>
+    <div className="projects-page enterprise-page">
+      <header className="enterprise-page-header">
+        <div className="enterprise-page-title">
+          <span>管理后台 / Projects</span>
+          <div className="enterprise-page-heading">项目管理</div>
         </div>
-        <div className="project-command-actions">
-          <button className="blue-button" type="button" onClick={() => setDraft(emptyDraft)}>新增项目</button>
+        <div className="enterprise-page-actions">
+          <button type="button" className="blue-button" onClick={() => setDraft(emptyDraft)}>新建项目</button>
           <button type="button" onClick={() => onNavigate("points")}>查看点位</button>
-          <button type="button" onClick={() => onNavigate("media")}>查看素材</button>
         </div>
+      </header>
+
+      <section className="projectSummary refined enterprise-kpi-grid">
+        <article><span>项目总数</span><b>{summary.total}</b><small>当前可见项目</small></article>
+        <article><span>进行中</span><b>{summary.active}</b><small>未隐藏且未归档</small></article>
+        <article><span>总点位</span><b>{summary.points}</b><small>跨全部项目</small></article>
+        <article><span>异常点位</span><b>{summary.risks}</b><small>需优先处理</small></article>
       </section>
 
-      <section className="project-page-grid">
-        <form className="project-editor-card" onSubmit={save}>
-          <div className="panel-head">
-            <h2>{draft.id ? "编辑项目" : "新增项目"}</h2>
-            <span>素材规则可独立配置</span>
+      <section className="enterprise-layout enterprise-two-column">
+        <form className="enterprise-card project-editor-card" onSubmit={save}>
+          <div className="enterprise-card-header">
+            <div>
+              <span>项目编辑</span>
+              <h3>{draft.id ? "编辑项目" : "新建项目"}</h3>
+            </div>
           </div>
           <div className="project-form-grid">
             <label><span>项目名称</span><input required value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="例如：加多宝村镇墙体项目" /></label>
@@ -124,14 +138,18 @@ export function ProjectsPage({ data, projects, activeProject, setActiveProject, 
           </div>
         </form>
 
-        <section className="project-list-panel">
-          <div className="table-toolbar compact">
-            <div className="toolbar-filters">
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索项目 / 客户 / 月份" />
-              <select value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)}>
-                {monthOptions.map((month) => <option key={month}>{month}</option>)}
-              </select>
+        <section className="enterprise-card project-list-panel">
+          <div className="enterprise-card-header">
+            <div>
+              <span>项目列表</span>
+              <h3>月度分组与进度</h3>
             </div>
+          </div>
+          <div className="enterprise-toolbar">
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索项目 / 客户 / 月份" />
+            <select value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)}>
+              {monthOptions.map((month) => <option key={month}>{month}</option>)}
+            </select>
           </div>
           <div className="project-management-table">
             {projectRows.map((project) => {
@@ -143,7 +161,7 @@ export function ProjectsPage({ data, projects, activeProject, setActiveProject, 
                     <span className="project-dot" style={{ background: project.color || "#2563eb" }} />
                     <div>
                       <b>{project.name}</b>
-                      <small>{project.client || "未填写客户"} · {project.month || "未设置年月"}</small>
+                      <small>{project.client || "未填写客户"} · {project.month || "未设置月份"}</small>
                     </div>
                     <strong>{stats.rate}%</strong>
                   </div>
@@ -166,7 +184,7 @@ export function ProjectsPage({ data, projects, activeProject, setActiveProject, 
                 </article>
               );
             })}
-            {!projectRows.length && <div className="empty compact">暂无项目，或筛选条件过窄。</div>}
+            {!projectRows.length && <div className="enterprise-empty">暂无项目，或筛选条件过窄。</div>}
           </div>
         </section>
       </section>

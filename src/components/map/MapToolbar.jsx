@@ -30,7 +30,7 @@ export function MapToolbar({
   setCurrentProjectOnly,
 }) {
   return (
-    <section className="map-toolbar">
+    <div className="enterprise-toolbar map-toolbar">
       <select value={activeProject} onChange={(event) => setActiveProject(event.target.value)}>
         {projects.map((project) => <option key={project.id || project.name} value={project.id === "all" ? "all" : project.name}>{project.name}</option>)}
       </select>
@@ -39,7 +39,7 @@ export function MapToolbar({
         {["全部", ...STATUS].map((item) => <option key={item}>{item}</option>)}
       </select>
       <select value={anomalyFilter} onChange={(event) => setAnomalyFilter(event.target.value)}>
-        {["全部异常", "未派单", "缺现场照片", "缺720 全景", "缺水印照片", "缺凯立德图片", "缺墙租协议图片"].map((item) => <option key={item}>{item}</option>)}
+        {["全部异常", "未派单", "缺现场照片", "缺720全景", "缺水印照片", "缺凯立德图纸", "缺墙租协议图片"].map((item) => <option key={item}>{item}</option>)}
       </select>
       <div className="segmented wide">
         <button type="button" className={viewMode === "dispatch" ? "active" : ""} onClick={() => setViewMode("dispatch")}>调度视图</button>
@@ -61,6 +61,6 @@ export function MapToolbar({
       <label><input type="checkbox" checked={showLabels} onChange={(event) => setShowLabels(event.target.checked)} /> 标签</label>
       <label><input type="checkbox" checked={onlineOnly} onChange={(event) => setOnlineOnly(event.target.checked)} /> 仅在线师傅</label>
       <label><input type="checkbox" checked={currentProjectOnly} onChange={(event) => setCurrentProjectOnly(event.target.checked)} /> 当前项目点位</label>
-    </section>
+    </div>
   );
 }

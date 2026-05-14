@@ -6,11 +6,11 @@ import { WorkerFormDrawer } from "../components/workers/WorkerFormDrawer";
 import { WorkersTable } from "../components/workers/WorkersTable";
 import { ConfirmDialog } from "../components/shared/ConfirmDialog";
 import {
-  copyTextToClipboard,
   buildWorkerUrl,
-  isLocalShareHostname,
+  copyTextToClipboard,
   fallbackLanAdminUrl,
   hasConfiguredPublicOrigin,
+  isLocalShareHostname,
   isUsingFallbackShareOrigin,
   isWorkerEnabled,
   isWorkerOnline,
@@ -67,6 +67,10 @@ export function WorkersPage({ data, projects, dispatchWorkerId, setDispatchWorke
   const currentPage = Math.min(page, totalPages);
   const pageWorkers = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const selectedWorker = data.workers.find((worker) => worker.id === selectedWorkerId) || pageWorkers[0] || null;
+  const onlineCount = data.workers.filter(isWorkerOnline).length;
+  const installCount = data.workers.filter((worker) => getWorkerTeamTypeName(worker) === "安装队伍").length;
+  const wallCount = data.workers.filter((worker) => getWorkerTeamTypeName(worker) === "找墙队伍").length;
+  const activeTaskCount = data.workers.reduce((sum, worker) => sum + taskCountForWorker(data.tasks, worker.id), 0);
 
   React.useEffect(() => {
     if (selectedWorker && dispatchWorkerId !== selectedWorker.id) setDispatchWorkerId(selectedWorker.id);
@@ -82,7 +86,7 @@ export function WorkersPage({ data, projects, dispatchWorkerId, setDispatchWorke
   function requestToggle(worker) {
     setConfirmAction({
       title: isWorkerEnabled(worker) ? `停用 ${worker.name}` : `启用 ${worker.name}`,
-      message: isWorkerEnabled(worker) ? "停用后该复杂 token 链接不可访问，也不会进入派单候选。" : "启用后需师傅重新打开链接并发送心跳才会显示在线。",
+      message: isWorkerEnabled(worker) ? "停用后该链接不可访问，也不会进入派单候选。" : "启用后需师傅重新打开链接并发送心跳才会显示在线。",
       confirmText: isWorkerEnabled(worker) ? "停用师傅" : "启用师傅",
       onConfirm: async () => {
         if (isWorkerEnabled(worker)) await data.disableWorker(worker.id);
@@ -95,7 +99,7 @@ export function WorkersPage({ data, projects, dispatchWorkerId, setDispatchWorke
   function requestDelete(worker) {
     setConfirmAction({
       title: `删除 ${worker.name}`,
-      message: "删除后会清理该师傅对应派单任务，此操作不可撤回。",
+      message: "删除后会清理该师傅对应派单任务，此操作不可恢复。",
       confirmText: "删除师傅",
       onConfirm: async () => {
         await data.removeWorkerDraft(worker.id);
@@ -107,7 +111,7 @@ export function WorkersPage({ data, projects, dispatchWorkerId, setDispatchWorke
   function requestReset(worker) {
     setConfirmAction({
       title: `重置 ${worker.name} 的链接`,
-      message: "重置后旧复杂 token 会立即失效，需要重新复制新链接给师傅。",
+      message: "重置后旧链接立即失效，需要重新复制新链接给师傅。",
       confirmText: "重置链接",
       onConfirm: async () => {
         await data.resetWorkerToken(worker.id);
@@ -117,21 +121,43 @@ export function WorkersPage({ data, projects, dispatchWorkerId, setDispatchWorke
   }
 
   return (
-    <div className="workers-page">
+    <div className="workers-page enterprise-page">
+      <header className="enterprise-page-header">
+        <div className="enterprise-page-title">
+          <span>管理后台 / Workers</span>
+          <div className="enterprise-page-heading">师傅管理</div>
+        </div>
+        <div className="enterprise-page-actions">
+          <button type="button" className="blue-button" onClick={() => setEditingWorker({})}>新增师傅</button>
+        </div>
+      </header>
+
       {isLocalShareHostname() && (
         <div className="share-link-warning" role="alert">
           {hasConfiguredPublicOrigin()
-            ? "当前后台通过 localhost 打开，但已配置公网域名，复制链接会使用公网域名。"
+            ? "当前后台通过 localhost 打开，但已配置公网域名。"
             : isUsingFallbackShareOrigin()
-              ? `当前后台通过 localhost 打开，系统已自动改用局域网地址生成师傅链接：${fallbackLanAdminUrl()}。正式公网使用请配置 VITE_PUBLIC_APP_ORIGIN。`
-              : `当前后台通过 localhost 打开，复制给手机可能打不开。请改用局域网地址打开后台，例如：${fallbackLanAdminUrl()}，或在生产环境配置 VITE_PUBLIC_APP_ORIGIN。`}
+              ? `当前后台通过 localhost 打开，系统已自动改用局域网地址生成师傅链接：${fallbackLanAdminUrl()}。`
+              : `当前后台通过 localhost 打开，复制链接可能打不开。请改用局域网地址打开后台，例如：${fallbackLanAdminUrl()}，或在生产环境配置 VITE_PUBLIC_APP_ORIGIN。`}
         </div>
       )}
-      <section className="table-toolbar worker-toolbar">
-        <div className="toolbar-actions">
-          <button className="blue-button" type="button" onClick={() => setEditingWorker({})}>新增师傅</button>
+
+      <section className="enterprise-kpi-grid">
+        <article className="enterprise-kpi-card"><span>师傅总数</span><b>{data.workers.length}</b><small>安装 + 找墙</small></article>
+        <article className="enterprise-kpi-card"><span>在线师傅</span><b>{onlineCount}</b><small>当前可联络</small></article>
+        <article className="enterprise-kpi-card"><span>安装队伍</span><b>{installCount}</b><small>执行施工</small></article>
+        <article className="enterprise-kpi-card"><span>找墙队伍</span><b>{wallCount}</b><small>回传墙源</small></article>
+        <article className="enterprise-kpi-card"><span>在手任务</span><b>{activeTaskCount}</b><small>全队当前负载</small></article>
+      </section>
+
+      <section className="enterprise-card">
+        <div className="enterprise-card-header">
+          <div>
+            <span>筛选与列表</span>
+            <h3>师傅列表</h3>
+          </div>
         </div>
-        <div className="toolbar-filters">
+        <div className="enterprise-toolbar worker-toolbar">
           <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="搜索姓名 / 手机号 / 车牌号" />
           <select value={filter} onChange={(event) => { setFilter(event.target.value); setPage(1); }}>
             {["全部", "在线", "离线", "链接启用", "链接停用", "安装队伍", "找墙队伍"].map((item) => <option key={item}>{item}</option>)}
@@ -140,35 +166,11 @@ export function WorkersPage({ data, projects, dispatchWorkerId, setDispatchWorke
             {["最近上线", "任务数", "姓名"].map((item) => <option key={item}>{item}</option>)}
           </select>
         </div>
-      </section>
-      <section className="worker-management-layout">
-        <div className="worker-table-area">
-          <WorkersTable
-            workers={pageWorkers}
-            tasks={data.tasks}
-            selectedWorkerId={selectedWorker?.id}
-            setSelectedWorkerId={setSelectedWorkerId}
-            onCopy={copyWorkerLink}
-            onOpen={openWorkerUrl}
-            onEdit={setEditingWorker}
-            onReset={requestReset}
-            onToggleEnabled={requestToggle}
-            onDelete={requestDelete}
-          />
-          <footer className="table-pagination">
-            <span>共 {filtered.length} 人，当前第 {currentPage}/{totalPages} 页</span>
-            <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
-              {[10, 20, 50].map((size) => <option key={size} value={size}>每页 {size} 条</option>)}
-            </select>
-            <button type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>上一页</button>
-            <button type="button" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>下一页</button>
-          </footer>
-          {copyText && <div className="mini-status success">{copyText}</div>}
-        </div>
-        <WorkerDetailPanel
-          worker={selectedWorker}
+        <WorkersTable
+          workers={pageWorkers}
           tasks={data.tasks}
-          points={data.points}
+          selectedWorkerId={selectedWorker?.id}
+          setSelectedWorkerId={setSelectedWorkerId}
           onCopy={copyWorkerLink}
           onOpen={openWorkerUrl}
           onEdit={setEditingWorker}
@@ -176,7 +178,33 @@ export function WorkersPage({ data, projects, dispatchWorkerId, setDispatchWorke
           onToggleEnabled={requestToggle}
           onDelete={requestDelete}
         />
+        <footer className="table-pagination">
+          <span>共 {filtered.length} 人，当前第 {currentPage}/{totalPages} 页</span>
+          <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
+            {[10, 20, 50].map((size) => <option key={size} value={size}>每页 {size} 条</option>)}
+          </select>
+          <button type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>上一页</button>
+          <button type="button" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>下一页</button>
+        </footer>
+        {copyText && <div className="mini-status success">{copyText}</div>}
       </section>
+
+      <section className="enterprise-two-column worker-management-layout">
+        <div className="worker-detail-panel">
+          <WorkerDetailPanel
+            worker={selectedWorker}
+            tasks={data.tasks}
+            points={data.points}
+            onCopy={copyWorkerLink}
+            onOpen={openWorkerUrl}
+            onEdit={setEditingWorker}
+            onReset={requestReset}
+            onToggleEnabled={requestToggle}
+            onDelete={requestDelete}
+          />
+        </div>
+      </section>
+
       {editingWorker && (
         <WorkerFormDrawer
           worker={editingWorker}

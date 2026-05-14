@@ -25,7 +25,7 @@ export function SystemHealthPage({ data, onRunDiagnosis }) {
   const healthItems = [
     { label: "API 状态", value: data.message?.includes("失败") ? "需关注" : "正常", tone: data.message?.includes("失败") ? "danger" : "success" },
     { label: "高德地图状态", value: supabaseEnv.hasAmapKey && supabaseEnv.hasAmapSecurityCode ? "Key 已配置" : "待配置", tone: supabaseEnv.hasAmapKey ? "success" : "warning" },
-    { label: "Kimi 状态", value: supabaseEnv.hasKimiClassifyEndpoint ? "已配置代理" : "本地规则兜底", tone: "info" },
+    { label: "Kimi 状态", value: supabaseEnv.hasKimiClassifyEndpoint ? "代理已配置" : "本地规则兜底", tone: "info" },
     { label: "当前数据模式", value: getDataModeLabel(DATA_MODE), tone: "info" },
     { label: "最近心跳时间", value: cnTime(data.workers.map((worker) => worker.lastSeenAt || worker.last_seen_at).filter(Boolean).sort().at(-1)), tone: "neutral" },
     { label: "在线师傅数量", value: data.workers.filter(isWorkerOnline).length, tone: "success" },
@@ -34,23 +34,50 @@ export function SystemHealthPage({ data, onRunDiagnosis }) {
     { label: "上传服务状态", value: "上传后自动完成已接入", tone: "success" },
     { label: "部署环境", value: import.meta.env.PROD ? "生产构建" : "开发 / 测试", tone: "neutral" },
   ];
+  const summary = [
+    { label: "整体状态", value: data.message?.includes("失败") ? "需关注" : "可用", hint: "自动诊断与手动检查组合" },
+    { label: "最近检查", value: "刚刚", hint: "当前页面实时刷新" },
+    { label: "今日上传", value: data.photos.length, hint: "图片 + 视频" },
+    { label: "在线率", value: `${data.workers.filter(isWorkerOnline).length}/${Math.max(1, data.workers.length)}`, hint: "在线 / 总师傅" },
+  ];
 
   return (
-    <div className="system-page">
-      <section className="health-grid">
+    <div className="system-page enterprise-page">
+      <header className="enterprise-page-header">
+        <div className="enterprise-page-title">
+          <span>管理后台 / System</span>
+          <div className="enterprise-page-heading">系统状态</div>
+        </div>
+        <div className="enterprise-page-actions">
+          <button type="button" className="blue-button" onClick={run}>开始诊断</button>
+        </div>
+      </header>
+
+      <section className="systemSummaryHero enterprise-kpi-grid">
+        {summary.map((item) => (
+          <article key={item.label} className="enterprise-kpi-card">
+            <span>{item.label}</span>
+            <b>{item.value}</b>
+            <small>{item.hint}</small>
+          </article>
+        ))}
+      </section>
+
+      <section className="enterprise-kpi-grid">
         {healthItems.map((item) => (
-          <article key={item.label} className={`health-card ${item.tone}`}>
+          <article key={item.label} className={`enterprise-kpi-card ${item.tone}`}>
             <span>{item.label}</span>
             <b>{item.value}</b>
           </article>
         ))}
       </section>
-      <section className="system-grid">
-        <section className="tool-card release-card">
-          <div className="section-head">
+
+      <section className="enterprise-two-column">
+        <section className="enterprise-card">
+          <div className="enterprise-card-header">
             <div>
-              <h2>版本信息</h2>
-              <p>用于确认当前打开的是哪一次构建，方便预览、发布和回滚。</p>
+              <span>版本信息</span>
+              <h3>发布与环境</h3>
             </div>
           </div>
           <div className="release-info-list">
@@ -63,14 +90,17 @@ export function SystemHealthPage({ data, onRunDiagnosis }) {
           </div>
         </section>
         <KimiConfig />
+      </section>
+
+      <section className="enterprise-two-column">
         <StabilityCheck />
-        <section className="tool-card diagnosis-card">
-          <div className="section-head">
+        <section className="enterprise-card diagnosis-card">
+          <div className="enterprise-card-header">
             <div>
-              <h2>系统健康诊断</h2>
-              <p>检查数据模式、接口和关键环境变量，不打印真实密钥。</p>
+              <span>系统健康</span>
+              <h3>系统健康诊断</h3>
             </div>
-            <button className="blue-button" type="button" onClick={run}>开始诊断</button>
+            <button className="blue-button" type="button" onClick={run}>重新诊断</button>
           </div>
           <pre className="diagnosis-pre">{safeJson(diagnosis || { mode: DATA_MODE, apiBaseUrl: DATA_MODE === "local" ? "本地模式无需配置" : API_BASE_URL })}</pre>
         </section>

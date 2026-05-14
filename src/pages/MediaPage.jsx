@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from "react";
 
-import { MediaFilters } from "../components/media/MediaFilters";
-import { MediaGrid } from "../components/media/MediaGrid";
 import { Modal } from "../components/shared/Modal";
+import { MediaCard } from "../components/media/MediaCard";
 import { createZip, textFile } from "../lib/zipArchive";
 import {
   getMediaUrl,
@@ -34,7 +33,7 @@ function extensionFromMedia(photo, kind) {
   return kind === "视频" ? "mp4" : "jpg";
 }
 
-export function MediaPage({ data, activeProject, timeRange = "近7天", globalSearch = "", focusPointId = "", onOpenSite }) {
+export function MediaPage({ data, activeProject, timeRange = "最近7天", globalSearch = "", focusPointId = "", onOpenSite }) {
   const [filters, setFilters] = useState({
     project: activeProject,
     pointId: "all",
@@ -71,7 +70,7 @@ export function MediaPage({ data, activeProject, timeRange = "近7天", globalSe
     const counts = mediaCounts(point, data.photos);
     if (!counts.total) return "无素材";
     const missing = getPointAnomalies(point, data.photos, data.tasks, data.projects).filter((item) => item.startsWith("缺"));
-    return missing.length ? "待补全" : "齐套";
+    return missing.length ? "待补齐" : "齐套";
   }
 
   const visible = useMemo(() => data.photos.filter((photo) => {
@@ -85,7 +84,7 @@ export function MediaPage({ data, activeProject, timeRange = "近7天", globalSe
     const timeOk = isDateInRange(photo.created_at || photo.createdAt, filters.timeRange);
     const workerOk = filters.workerId === "all" || (photo.worker_id || photo.workerId) === filters.workerId;
     const classifiedOk = filters.status === "已分类" ? Boolean(photo.kind || photo.media_kind) : filters.status === "待分类" ? !photo.kind && !photo.media_kind : true;
-    const completionOk = ["齐套", "待补全", "无素材"].includes(filters.status) ? point && materialStatus(point) === filters.status : true;
+    const completionOk = ["齐套", "待补齐", "无素材"].includes(filters.status) ? point && materialStatus(point) === filters.status : true;
     const haystack = [
       point?.title,
       point?.address,
@@ -107,7 +106,7 @@ export function MediaPage({ data, activeProject, timeRange = "近7天", globalSe
     return {
       rows,
       complete: rows.filter((row) => row.status === "齐套").length,
-      partial: rows.filter((row) => row.status === "待补全").length,
+      partial: rows.filter((row) => row.status === "待补齐").length,
       empty: rows.filter((row) => row.status === "无素材").length,
     };
   }, [scopedPoints, data.photos, data.tasks, data.projects]);
@@ -195,36 +194,74 @@ export function MediaPage({ data, activeProject, timeRange = "近7天", globalSe
   }
 
   return (
-    <div className="media-page">
-      <section className="media-rule-panel">
-        <div>
-          <span>素材规则说明</span>
-          <h2>按项目规则判断齐套 / 待补全 / 无素材</h2>
-          <p>筛选和异常摘要复用阶段 1 的统一素材分类，图片类素材保持无限制上传；批量下载按当前筛选结果执行。</p>
+    <div className="media-page enterprise-page">
+      <header className="enterprise-page-header">
+        <div className="enterprise-page-title">
+          <span>管理后台 / Media</span>
+          <div className="enterprise-page-heading">素材管理</div>
         </div>
-        <div className="media-rule-stats">
-          <article><span>当前素材</span><b>{visible.length}</b></article>
-          <article><span>齐套点位</span><b>{materialSummary.complete}</b></article>
-          <article><span>待补全</span><b>{materialSummary.partial}</b></article>
-          <article><span>无素材</span><b>{materialSummary.empty}</b></article>
+        <div className="enterprise-page-actions">
+          <button type="button" className="blue-button" onClick={downloadArchiveZip}>批量下载 ZIP</button>
+          <button type="button" onClick={downloadArchiveManifest}>导出归档清单</button>
+          <button type="button" onClick={exportList}>导出清单</button>
         </div>
-        <div className="project-rule-list expanded">
-          {(filters.project === "all" ? projects.filter((project) => project.id !== "all").slice(0, 4) : projects.filter((project) => project.name === filters.project)).map((project) => (
-            <span key={project.id || project.name}>{project.name}：{normalizeMaterialRules(project.materialRules || project.material_rules, project.name).join(" + ")}</span>
-          ))}
+      </header>
+
+      <section className="enterprise-kpi-grid">
+        <article className="enterprise-kpi-card"><span>当前素材</span><b>{visible.length}</b><small>过滤后结果</small></article>
+        <article className="enterprise-kpi-card"><span>齐套点位</span><b>{materialSummary.complete}</b><small>素材已达标</small></article>
+        <article className="enterprise-kpi-card"><span>待补齐</span><b>{materialSummary.partial}</b><small>需继续上传</small></article>
+        <article className="enterprise-kpi-card"><span>无素材</span><b>{materialSummary.empty}</b><small>当前没有上传</small></article>
+      </section>
+
+      <section className="enterprise-card">
+        <div className="enterprise-card-header">
+          <div>
+            <span>素材筛选</span>
+            <h3>按项目 / 点位 / 类型 / 状态筛选</h3>
+          </div>
+        </div>
+        <div className="enterprise-toolbar media-toolbar">
+          <select value={filters.project} onChange={(event) => setFilters((current) => ({ ...current, project: event.target.value }))}>
+            {projects.map((project) => <option key={project.id || project.name} value={project.id === "all" ? "all" : project.name}>{project.name}</option>)}
+          </select>
+          <select value={filters.pointId} onChange={(event) => setFilters((current) => ({ ...current, pointId: event.target.value }))}>
+            <option value="all">全部点位</option>
+            {points.map((point) => <option key={point.id} value={point.id}>{point.title}</option>)}
+          </select>
+          <select value={filters.kind} onChange={(event) => setFilters((current) => ({ ...current, kind: event.target.value }))}>
+            {["全部素材", "现场照片", "720 全景", "水印照片", "凯立德图片", "墙租协议图片", "视频"].map((item) => <option key={item}>{item}</option>)}
+          </select>
+          <input type="date" value={filters.date} onChange={(event) => setFilters((current) => ({ ...current, date: event.target.value }))} />
+          <select value={filters.timeRange} onChange={(event) => setFilters((current) => ({ ...current, timeRange: event.target.value }))}>
+            {["全部时间", "今天", "最近7天", "本月"].map((item) => <option key={item}>{item}</option>)}
+          </select>
+          <select value={filters.workerId} onChange={(event) => setFilters((current) => ({ ...current, workerId: event.target.value }))}>
+            <option value="all">全部师傅</option>
+            {data.workers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name}</option>)}
+          </select>
+          <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
+            {["全部状态", "齐套", "待补齐", "无素材", "已分类", "待分类"].map((item) => <option key={item}>{item}</option>)}
+          </select>
+          <input value={filters.keyword} onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))} placeholder="搜索点位 / 地址 / 师傅 / 文件" />
         </div>
       </section>
-      <MediaFilters
-        projects={projects}
-        workers={data.workers}
-        points={points}
-        filters={filters}
-        setFilters={setFilters}
-        onExport={exportList}
-        onDownload={downloadArchiveZip}
-        onManifest={downloadArchiveManifest}
-      />
-      <MediaGrid media={visible} points={data.points} onPreview={(photo, point) => setPreview({ photo, point })} />
+
+      <section className="enterprise-card">
+        <div className="enterprise-card-header">
+          <div>
+            <span>素材列表</span>
+            <h3>表格与卡片混合视图</h3>
+          </div>
+        </div>
+        <div className="media-center-grid">
+          {visible.map((photo) => {
+            const point = data.points.find((item) => item.id === (photo.point_id || photo.pointId));
+            return <MediaCard key={photo.id} photo={photo} point={point} onPreview={(p, currentPoint) => setPreview({ photo: p, point: currentPoint })} />;
+          })}
+        </div>
+      </section>
+
       {preview && (
         <Modal title={preview.point?.title || "素材预览"} subtitle={`${mediaKind(preview.photo)} · ${preview.point?.address || ""}`} onClose={() => setPreview(null)} wide>
           <div className="media-preview-modal">
@@ -239,7 +276,7 @@ export function MediaPage({ data, activeProject, timeRange = "近7天", globalSe
               <div><span>点位编号</span><b>{preview.point?.title || "未知"}</b></div>
               <div><span>项目</span><b>{getProjectName(preview.point)}</b></div>
               <div><span>状态</span><b>{getPointStatus(preview.point)}</b></div>
-              <div><span>文件</span><b>{preview.photo.file_name || "现场资料"}</b></div>
+              <div><span>文件</span><b>{preview.photo.file_name || "现场素材"}</b></div>
               <button className="blue-button" type="button" onClick={() => preview.point && onOpenSite(preview.point)}>按点位进入现场查看</button>
             </aside>
           </div>

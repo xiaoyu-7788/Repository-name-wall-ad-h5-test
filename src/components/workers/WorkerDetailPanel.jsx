@@ -1,91 +1,67 @@
-import React, { useState } from "react";
+import React from "react";
 
 import { getWorkerTeamTypeName } from "../../apiClient";
-import {
-  buildWorkerUrl,
-  getPointStatus,
-  isWorkerEnabled,
-  isWorkerMoving,
-  isWorkerOnline,
-  taskCountForWorker,
-  taskPointId,
-  workerCarNo,
-  workerLastLocationText,
-  workerLastSeenText,
-} from "../../lib/domain";
-import { StatusBadge, StatusPill } from "../shared/StatusBadge";
+import { isWorkerEnabled, isWorkerOnline, taskCountForWorker, taskPointId, workerCarNo, workerLastLocationText, workerLastSeenText } from "../../lib/domain";
+import { EmptyState } from "../shared/EmptyState";
+import { StatusBadge } from "../shared/StatusBadge";
 
-export function WorkerDetailPanel({ worker, tasks, points, onCopy, onOpen, onEdit, onReset, onToggleEnabled, onDelete }) {
-  const [tab, setTab] = useState("基本信息");
+export function WorkerDetailPanel({ worker, tasks = [], points = [], onCopy, onOpen, onEdit, onReset, onToggleEnabled, onDelete }) {
   if (!worker) {
-    return <aside className="worker-detail-panel empty">选择一位师傅查看详情。</aside>;
+    return (
+      <section className="enterprise-card worker-detail-card">
+        <div className="enterprise-card-header">
+          <div>
+            <span>师傅详情</span>
+            <h3>请选择一位师傅</h3>
+          </div>
+        </div>
+        <EmptyState title="请选择师傅详情" description="在列表中点击某一行后，这里会显示师傅详情、任务概览和快捷操作。" />
+      </section>
+    );
   }
-  const workerTasks = tasks.filter((task) => (task.worker_id || task.workerId) === worker.id);
-  const taskPoints = workerTasks.map((task) => points.find((point) => point.id === taskPointId(task))).filter(Boolean);
+
+  const enabled = isWorkerEnabled(worker);
+  const online = isWorkerOnline(worker);
+  const workerTasks = tasks.filter((task) => String(task.worker_id || task.workerId) === String(worker.id));
+  const pointNames = workerTasks
+    .map((task) => points.find((point) => String(point.id) === String(taskPointId(task)))?.title || points.find((point) => String(point.id) === String(taskPointId(task)))?.point_code)
+    .filter(Boolean)
+    .slice(0, 6);
 
   return (
-    <aside className="worker-detail-panel">
-      <div className="worker-detail-head">
+    <section className="enterprise-card worker-detail-card">
+      <div className="enterprise-card-header">
         <div>
-          <h2>{worker.name}</h2>
-          <p>{worker.phone || "未登记手机号"} · {workerCarNo(worker)}</p>
+          <span>师傅详情</span>
+          <h3>{worker.name}</h3>
         </div>
-        <StatusBadge tone={isWorkerOnline(worker) ? "success" : "neutral"} dot>{isWorkerOnline(worker) ? "在线" : "离线"}</StatusBadge>
+        <StatusBadge tone={online ? "success" : "neutral"} dot>{online ? "在线" : "离线"}</StatusBadge>
       </div>
-      <div className="worker-primary-actions">
-        <button className="blue-button" type="button" onClick={() => onCopy(worker)}>复制链接</button>
-        <button type="button" onClick={() => onOpen(worker)}>打开师傅端</button>
-        <button type="button" onClick={() => onEdit(worker)}>编辑</button>
+
+      <div className="worker-detail-grid">
+        <div><span>手机</span><b>{worker.phone || "未登记"}</b></div>
+        <div><span>车牌</span><b>{workerCarNo(worker)}</b></div>
+        <div><span>队伍</span><b>{getWorkerTeamTypeName(worker)}</b></div>
+        <div><span>链接</span><b>{enabled ? "启用" : "停用"}</b></div>
+        <div><span>任务数</span><b>{taskCountForWorker(tasks, worker.id)}</b></div>
+        <div><span>最近在线</span><b>{workerLastSeenText(worker)}</b></div>
+        <div><span>最近定位</span><b>{workerLastLocationText(worker)}</b></div>
+        <div><span>当前状态</span><b>{worker.moving ? "行驶中" : "停留中"}</b></div>
       </div>
-      <div className="worker-secondary-actions">
-        <button type="button" onClick={() => onReset(worker)}>重置链接</button>
-        <button type="button" className={isWorkerEnabled(worker) ? "disable-worker-button" : "enable-worker-button"} onClick={() => onToggleEnabled(worker)}>{isWorkerEnabled(worker) ? "停用师傅" : "启用师傅"}</button>
-        <button type="button" className="delete-worker-button" onClick={() => onDelete(worker)}>删除师傅</button>
+
+      <div className="worker-detail-strip">
+        <b>已关联点位</b>
+        <div>{pointNames.length ? pointNames.map((name) => <span key={name}>{name}</span>) : <small>暂无任务</small>}</div>
       </div>
-      <div className="detail-tabs">
-        {["基本信息", "任务", "定位"].map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}
+
+      <div className="row-actions enterprise-row-actions worker-detail-actions">
+        <button type="button" onClick={() => onCopy?.(worker)}>复制链接</button>
+        <button type="button" onClick={() => onOpen?.(worker)}>打开师傅页</button>
+        <button type="button" onClick={() => onEdit?.(worker)}>编辑</button>
+        <button type="button" onClick={() => onReset?.(worker)}>重置链接</button>
+        <button type="button" onClick={() => onToggleEnabled?.(worker)}>{enabled ? "停用" : "启用"}</button>
+        <button type="button" className="danger-text" onClick={() => onDelete?.(worker)}>删除师傅</button>
       </div>
-      {tab === "基本信息" && (
-        <div className="detail-grid single">
-          <div><span>姓名</span><b>{worker.name}</b></div>
-          <div><span>手机号</span><b>{worker.phone || "未登记"}</b></div>
-          <div><span>车牌号</span><b>{workerCarNo(worker)}</b></div>
-          <div><span>队伍类型</span><b>{getWorkerTeamTypeName(worker)}</b></div>
-          <div><span>在线/离线</span><b>{isWorkerOnline(worker) ? "在线" : "离线"}</b></div>
-          <div><span>链接启用/停用</span><b>{isWorkerEnabled(worker) ? "链接启用" : "链接停用"}</b></div>
-          <div><span>最后在线</span><b>{workerLastSeenText(worker)}</b></div>
-          <div><span>当前任务数</span><b>{taskCountForWorker(tasks, worker.id)}</b></div>
-          <div><span>当前定位</span><b>{worker.lng || "-"}, {worker.lat || "-"}</b></div>
-          <div><span>最近定位</span><b>{workerLastLocationText(worker)}</b></div>
-          <div><span>后台复制链接</span><b>{buildWorkerUrl(worker)}</b></div>
-        </div>
-      )}
-      {tab === "任务" && (
-        <div className="worker-task-list">
-          <div className="worker-snapshot compact">
-            <div><span>已派单</span><b>{taskPoints.length}</b></div>
-            <div><span>施工中</span><b>{taskPoints.filter((point) => getPointStatus(point) === "施工中").length}</b></div>
-            <div><span>已完成</span><b>{taskPoints.filter((point) => getPointStatus(point) === "已完成").length}</b></div>
-          </div>
-          {taskPoints.slice(0, 12).map((point) => (
-            <article key={point.id}>
-              <b>{point.title}</b>
-              <span>{point.address}</span>
-              <StatusPill status={getPointStatus(point)} />
-            </article>
-          ))}
-          {!taskPoints.length && <div className="empty compact">暂无派单任务。</div>}
-        </div>
-      )}
-      {tab === "定位" && (
-        <div className="detail-grid single">
-          <div><span>最近坐标</span><b>{worker.lng || "-"}, {worker.lat || "-"}</b></div>
-          <div><span>移动状态</span><b>{isWorkerMoving(worker) ? "移动中" : "停止"}</b></div>
-          <div><span>速度</span><b>{Math.round(Number(worker.speed || 0))} km/h</b></div>
-          <div><span>最近上报时间</span><b>{workerLastLocationText(worker)}</b></div>
-          <div><span>轨迹记录</span><b>已预留轨迹播放入口</b></div>
-        </div>
-      )}
-    </aside>
+    </section>
   );
 }

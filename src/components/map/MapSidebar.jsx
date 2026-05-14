@@ -20,7 +20,7 @@ import {
   workerLastSeenText,
   workerMotionLabel,
 } from "../../lib/domain";
-import { StatusPill } from "../shared/StatusBadge";
+import { StatusBadge } from "../shared/StatusBadge";
 
 export function MapSidebar({
   tab,
@@ -64,7 +64,7 @@ export function MapSidebar({
   }
 
   return (
-    <aside className="map-side-panel">
+    <aside className="enterprise-card enterprise-sidebar-panel map-side-panel">
       <div className="map-side-tabs">
         {tabs.map((item) => <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}
       </div>
@@ -90,7 +90,7 @@ export function MapSidebar({
                   </span>
                 </label>
                 <button type="button" onClick={() => onSelectPoint?.(point)}>定位</button>
-                <StatusPill status={getPointStatus(point)} />
+                <StatusBadge tone="info">{getPointStatus(point)}</StatusBadge>
               </article>
             ))}
           </div>
@@ -142,7 +142,7 @@ export function MapSidebar({
               <div className="map-detail-view">
                 <div className="detail-title">
                   <b>{selectedPoint.title}</b>
-                  <StatusPill status={getPointStatus(selectedPoint)} />
+                  <StatusBadge tone="info">{getPointStatus(selectedPoint)}</StatusBadge>
                 </div>
                 <p>{selectedPoint.address}</p>
                 <div className="detail-grid single">
@@ -164,7 +164,7 @@ export function MapSidebar({
                 </div>
               </div>
             );
-          })() : <div className="empty compact">点击地图点位查看详情。</div>
+          })() : <div className="enterprise-empty">点击地图点位查看详情。</div>
         )}
         {tab === "师傅详情" && (
           selectedWorker ? (() => {
@@ -180,10 +180,10 @@ export function MapSidebar({
                   <span className={`status-badge ${online ? "success" : "neutral"}`}>{online ? workerMotionLabel(selectedWorker) : "离线"}</span>
                 </div>
                 <div className="detail-grid single">
-                  <div><span>手机号</span><b>{selectedWorker.phone || "未登记"}</b></div>
-                  <div><span>车牌号</span><b>{workerCarNo(selectedWorker)}</b></div>
+                  <div><span>手机</span><b>{selectedWorker.phone || "未登记"}</b></div>
+                  <div><span>车牌</span><b>{workerCarNo(selectedWorker)}</b></div>
                   <div><span>在线状态</span><b>{online ? "在线" : "离线"}</b></div>
-                  <div><span>当前任务</span><b>{taskCountForWorker(tasks, selectedWorker.id)} 个{taskTitles.length ? `：${taskTitles.slice(0, 3).join("、")}` : ""}</b></div>
+                  <div><span>当前任务</span><b>{taskCountForWorker(tasks, selectedWorker.id)} 个{taskTitles.length ? `，涉及 ${taskTitles.slice(0, 3).join("、")}` : ""}</b></div>
                   <div><span>最近上报时间</span><b>{workerLastLocationText(selectedWorker)} / 心跳 {workerLastSeenText(selectedWorker)}</b></div>
                   <div><span>最近坐标</span><b>{selectedWorker.lng || "-"}, {selectedWorker.lat || "-"}</b></div>
                   <div><span>今日轨迹</span><b>{selectedWorkerTrackLogs.length ? `${selectedWorkerTrackLogs.length} 条` : "暂无轨迹记录"}</b></div>
@@ -198,7 +198,7 @@ export function MapSidebar({
                 </div>
               </div>
             );
-          })() : <div className="empty compact">点击小车 marker 查看师傅详情。</div>
+          })() : <div className="enterprise-empty">点击小车 marker 查看师傅详情。</div>
         )}
         {tab === "轨迹回放" && (
           <div className="map-detail-view">
@@ -206,7 +206,7 @@ export function MapSidebar({
               <b>轨迹回放基础</b>
               <span>{selectedWorker ? selectedWorker.name : "未选择师傅"}</span>
             </div>
-            <p>当前基础版读取 `worker-location` 写入的最近位置和 `trackLogs`，按今天轨迹倒序展示；后续可继续扩展时间轴播放和停车时长分析。</p>
+            <p>当前基础版读取最近位置与 trackLogs，按今天轨迹倒序展示。</p>
             {selectedWorker ? (
               <div className="track-mini-list">
                 {selectedWorkerTrackLogs.map((log) => (
@@ -215,9 +215,9 @@ export function MapSidebar({
                     <span>{log.recorded_at || log.timestamp || log.created_at} · 速度 {log.speed ?? 0} · {log.lng}, {log.lat}</span>
                   </article>
                 ))}
-                {!selectedWorkerTrackLogs.length && <div className="empty compact">该师傅今天暂无轨迹；开启师傅端实时定位后会写入。</div>}
+                {!selectedWorkerTrackLogs.length && <div className="enterprise-empty">该师傅今天暂无轨迹；开启师傅端实时定位后会写入。</div>}
               </div>
-            ) : <div className="empty compact">请先点击地图上的小车 Marker。</div>}
+            ) : <div className="enterprise-empty">请先点击地图上的小车 Marker。</div>}
           </div>
         )}
       </div>
