@@ -693,7 +693,7 @@ a {
 }
 
 .mapQueuePanel {
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
 }
@@ -725,6 +725,40 @@ a {
 .mapCanvasMain > div {
   width: 100%;
   height: 100%;
+}
+
+.enterprise-card-header > .mapCanvasChips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+
+.mapCanvasChips span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: #eff6ff;
+  color: #1e40af;
+  white-space: nowrap;
+}
+
+.mapCanvasChips small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.mapCanvasChips b {
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .enterprise-sidebar-panel {
@@ -955,56 +989,32 @@ a {
 
 .mapQueueSummary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  min-width: 0;
 }
 
 .mapQueueSummary article {
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 4px;
-  border-radius: 16px;
-  padding: 12px;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 3px 7px;
   background: var(--panel-soft);
 }
 
 .mapQueueSummary span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .mapQueueSummary b {
   color: var(--ink);
-  font-size: 22px;
-}
-
-.mapQueueMiniStats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.mapQueueMiniStats div {
-  min-height: 48px;
-  border: 1px solid #e5edf7;
-  border-radius: 12px;
-  padding: 8px 10px;
-  background: #f8fafc;
-}
-
-.mapQueueMiniStats span {
-  display: block;
-  color: #64748b;
-  font-size: 11px;
-  line-height: 1.2;
-  font-weight: 900;
-}
-
-.mapQueueMiniStats b {
-  display: block;
-  margin-top: 4px;
-  color: #0f172a;
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1;
 }
 
@@ -5528,12 +5538,12 @@ button:hover,
   }
 
   .mapQueueSummary article {
-    border-radius: 12px;
-    padding: 8px;
+    min-height: 24px;
+    padding: 3px 6px;
   }
 
   .mapQueueSummary b {
-    font-size: 18px;
+    font-size: 13px;
   }
 
   .mapQueueRow {

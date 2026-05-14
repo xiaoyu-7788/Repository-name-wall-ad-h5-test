@@ -24,10 +24,10 @@ export function Sidebar({ activePage, collapsed, onToggle, onNavigate, dataSourc
             type="button"
             className={activePage === item.key ? "active" : ""}
             onClick={() => onNavigate(item.key)}
-            title={`${item.label} ${item.en}`}
+            title={item.label}
           >
             <span>{item.icon}</span>
-            {!collapsed && <><b>{item.label}</b><small>{item.en}</small></>}
+            {!collapsed && <b>{item.label}</b>}
           </button>
         ))}
       </nav>

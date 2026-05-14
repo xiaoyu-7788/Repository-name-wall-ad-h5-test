@@ -22,13 +22,13 @@ async function resetDemoData(page) {
 }
 
 async function goPage(page, name, heading) {
-  await page.getByRole("button", { name }).click();
+  await page.locator(".sidebar-nav").getByRole("button", { name }).click();
   await expect(page.getByRole("heading", { name: heading })).toBeVisible();
 }
 
 async function dispatchToLi(page) {
   await resetDemoData(page);
-  await goPage(page, "派单中心 Dispatch Center", "派单中心");
+  await goPage(page, "派单中心", "派单中心");
     await page.locator(".dispatch-summary select").selectOption("w2");
     await page.getByRole("button", { name: "全选" }).click();
     await page.getByRole("button", { name: "一键派单" }).click();
@@ -48,33 +48,33 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     await expect(page.getByText("总项目数")).toBeVisible();
     await expect(page.getByText("今日优先事项")).toBeVisible();
 
-    await goPage(page, "地图调度 Map Console", "地图调度");
+    await goPage(page, "地图调度", "地图调度");
     await expect(page.locator(".map-console-layout")).toBeVisible();
     await expect(page.getByText("点位图层")).toBeVisible();
 
-    await goPage(page, "点位管理 Point Center", "点位管理");
+    await goPage(page, "点位管理", "点位管理");
     await expect(page.locator(".pointTableWrap")).toBeVisible();
 
-    await goPage(page, "师傅管理 Worker Management", "师傅管理");
+    await goPage(page, "师傅管理", "师傅管理");
     await expect(page.locator(".worker-management-layout")).toBeVisible();
 
-    await goPage(page, "派单中心 Dispatch Center", "派单中心");
+    await goPage(page, "派单中心", "派单中心");
     await expect(page.locator(".dispatch-workflow")).toBeVisible();
 
-    await goPage(page, "项目管理 Project Management", "项目管理");
+    await goPage(page, "项目管理", "项目管理");
     await expect(page.locator(".projects-page")).toBeVisible();
 
-    await goPage(page, "素材管理 Media Center", "素材管理");
+    await goPage(page, "素材管理", "素材管理");
     await expect(page.locator(".media-page")).toBeVisible();
 
-    await goPage(page, "系统状态 System Health", "系统状态");
+    await goPage(page, "系统状态", "系统状态");
     await expect(page.getByText("系统健康诊断")).toBeVisible();
   });
 
   test("点位管理支持表格、搜索、筛选、分页、新增编辑删除入口", async ({ page }) => {
     await resetDemoData(page);
-    await goPage(page, "点位管理 Point Center", "点位管理");
-    await expect(page.getByText("管理后台 / Point Center")).toBeVisible();
+    await goPage(page, "点位管理", "点位管理");
+    await expect(page.locator(".enterprise-header .header-title span")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "点位管理" })).toBeVisible();
     await expect(page.getByRole("button", { name: "标签管理", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "批量导入", exact: true })).toBeVisible();
@@ -162,18 +162,18 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     expect(state.points.every((point) => statuses.includes(point.status))).toBeTruthy();
     expect(state.projects.every((project) => Array.isArray(project.materialRules))).toBeTruthy();
 
-    await goPage(page, "点位管理 Point Center", "点位管理");
+    await goPage(page, "点位管理", "点位管理");
     await expect(page.getByPlaceholder("搜索点位编号 / 地址 / 项目 / 师傅")).toBeVisible();
     await expect(page.locator(".pointToolbar")).toContainText("全部状态");
 
-    await goPage(page, "素材管理 Media Center", "素材管理");
+    await goPage(page, "素材管理", "素材管理");
     const mediaOptions = await page.locator(".media-toolbar select").nth(2).locator("option").allTextContents();
     expect(mediaOptions).toEqual(expect.arrayContaining(["现场照片", "720 全景", "水印照片", "凯立德图片", "墙租协议图片", "视频"]));
   });
 
   test("师傅管理支持分页搜索筛选详情和 token 链接全流程", async ({ page }) => {
     await resetDemoData(page);
-    await goPage(page, "师傅管理 Worker Management", "师傅管理");
+    await goPage(page, "师傅管理", "师傅管理");
     await expect(page.locator(".share-link-warning")).toContainText("当前后台通过 localhost 打开");
     await expect(page.locator(".worker-detail-panel")).toContainText("复制链接");
 
@@ -204,7 +204,7 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     await expect(page.locator(".mini-status.success")).not.toContainText("localhost");
     await expect(page.locator(".mini-status.success")).not.toContainText("127.0.0.1");
 
-    await goPage(page, "派单中心 Dispatch Center", "派单中心");
+    await goPage(page, "派单中心", "派单中心");
     await page.locator(".dispatch-summary select").selectOption(worker.id);
     await page.getByRole("button", { name: "全选" }).click();
     await page.getByRole("button", { name: "一键派单" }).click();
@@ -275,11 +275,20 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
   test("地图调度保留点位 marker、小车 marker 与右侧 Tabs", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 980 });
     await resetDemoData(page);
-    await goPage(page, "地图调度 Map Console", "地图调度");
+    await goPage(page, "地图调度", "地图调度");
     await expect(page.locator(".amap-shell")).toBeVisible();
-    await expect(page.locator(".mapMain > .mapTopStats, .mapMain > .mapCompactStats, .mapMain > .summary")).toHaveCount(0);
+    await expect(page.locator("text=DEBUG-MAP-LAYOUT-20260514-ONLY-CURRENT-SOURCE")).toHaveCount(0);
+    await expect(page.locator(".mapMain > .mapTopStats, .mapMain > .mapCompactStats, .mapMain > .summary, .mapMain > .mapKpiStrip")).toHaveCount(0);
     await expect(page.locator(".mapCompactStats")).toHaveCount(0);
-    await expect(page.locator(".mapQueuePanel .mapQueueMiniStats")).toBeVisible();
+    await expect(page.locator(".mapKpiStrip, .topStats, .statCard")).toHaveCount(0);
+    await expect(page.locator(".mapQueuePanel .mapQueueMiniStats")).toHaveCount(0);
+    await expect(page.locator(".mapCanvasChips")).toBeVisible();
+    const queueSummaryBox = await page.locator(".mapQueueSummary").boundingBox();
+    expect(queueSummaryBox).toBeTruthy();
+    expect(queueSummaryBox.height).toBeLessThanOrEqual(60);
+    expect(await page.locator(".mapCanvasChips span").evaluateAll((items) => (
+      items.every((item) => item.getBoundingClientRect().height <= 32)
+    ))).toBe(true);
     expect(await page.evaluate(() => {
       const banned = ["当前筛选点位", "已派出点位", "区域异常"];
       const topSections = Array.from(document.querySelectorAll(".mapMain > section:not(.mapDispatchLayout)"));
@@ -336,6 +345,9 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     await expect(page.locator(".map-toolbar").getByRole("button", { name: "框选" })).toBeVisible();
     await expect(page.locator(".map-toolbar").getByRole("button", { name: "圈选" })).toBeVisible();
     await expect(page.locator(".map-side-tabs").getByRole("button", { name: "派单", exact: true })).toBeVisible();
+    await page.locator(".map-side-tabs").getByRole("button", { name: "点位筛选", exact: true }).click();
+    await expect(page.locator(".map-side-panel")).toContainText("筛选结果");
+    await expect(page.locator(".map-side-panel")).not.toContainText("当前筛选点位");
     await page.locator(".map-side-tabs").getByRole("button", { name: "点位详情", exact: true }).click();
     await expect(page.locator(".map-side-panel")).toContainText("GZ-BY-001");
     await expect(page.locator(".map-side-panel")).toContainText("素材情况");
@@ -426,9 +438,9 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
 
   test("系统状态、独立项目管理、Kimi 配置、导出 JSON 可用", async ({ page }) => {
     await resetDemoData(page);
-    await goPage(page, "项目管理 Project Management", "项目管理");
+    await goPage(page, "项目管理", "项目管理");
     await expect(page.locator(".projects-page")).toContainText("素材必传规则");
-    await goPage(page, "系统状态 System Health", "系统状态");
+    await goPage(page, "系统状态", "系统状态");
     await expect(page.getByText("API 状态")).toBeVisible();
     await expect(page.getByText("Kimi AI 图片分类配置")).toBeVisible();
     await expect(page.getByText("稳定性自检")).toBeVisible();

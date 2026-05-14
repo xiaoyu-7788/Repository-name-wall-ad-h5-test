@@ -45,7 +45,6 @@ export function SystemHealthPage({ data, onRunDiagnosis }) {
     <div className="system-page enterprise-page">
       <header className="enterprise-page-header">
         <div className="enterprise-page-title">
-          <span>管理后台 / System</span>
           <div className="enterprise-page-heading">系统状态</div>
         </div>
         <div className="enterprise-page-actions">

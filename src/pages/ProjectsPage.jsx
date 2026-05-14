@@ -91,7 +91,6 @@ export function ProjectsPage({ data, projects, activeProject, setActiveProject, 
     <div className="projects-page enterprise-page">
       <header className="enterprise-page-header">
         <div className="enterprise-page-title">
-          <span>管理后台 / Projects</span>
           <div className="enterprise-page-heading">项目管理</div>
         </div>
         <div className="enterprise-page-actions">

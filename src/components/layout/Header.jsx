@@ -24,7 +24,6 @@ export function Header({
   return (
     <header className="enterprise-header">
       <div className="header-title">
-        <span>{isPointsPage ? "管理后台 / Point Center" : `管理后台 / ${page.en}`}</span>
         <h1>{page.label}</h1>
       </div>
       {isPointsPage ? (

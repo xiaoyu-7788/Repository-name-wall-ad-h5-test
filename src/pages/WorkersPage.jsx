@@ -124,7 +124,6 @@ export function WorkersPage({ data, projects, dispatchWorkerId, setDispatchWorke
     <div className="workers-page enterprise-page">
       <header className="enterprise-page-header">
         <div className="enterprise-page-title">
-          <span>管理后台 / Workers</span>
           <div className="enterprise-page-heading">师傅管理</div>
         </div>
         <div className="enterprise-page-actions">

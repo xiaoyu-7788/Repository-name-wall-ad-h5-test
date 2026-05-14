@@ -199,7 +199,6 @@ export function MediaPage({ data, activeProject, timeRange = "最近7天", globa
     <div className="media-page enterprise-page">
       <header className="enterprise-page-header">
         <div className="enterprise-page-title">
-          <span>管理后台 / Media</span>
           <div className="enterprise-page-heading">素材管理</div>
         </div>
         <div className="enterprise-page-actions">

@@ -113,7 +113,6 @@ export function DispatchPage({ data, activeProject, selectedIds, setSelectedIds,
     <div className="dispatch-page enterprise-page">
       <header className="enterprise-page-header">
         <div className="enterprise-page-title">
-          <span>管理后台 / Dispatch</span>
           <div className="enterprise-page-heading">派单中心</div>
         </div>
         <div className="enterprise-page-actions">

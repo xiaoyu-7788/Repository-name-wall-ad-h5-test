@@ -135,27 +135,26 @@ export function MapConsolePage({
     getPointAnomalies(point, data.photos, data.tasks, data.projects).length > 0
   )).length;
 
-  const queueMiniStats = [
-    { label: "待处理", value: filteredPoints.length },
-    { label: "已派出", value: dispatchedPointCount },
-    { label: "在线", value: onlineWorkerCount },
+  const mapCanvasChips = [
+    { label: "点位", value: filteredPoints.length },
+    { label: "已派", value: dispatchedPointCount },
+    { label: "师傅", value: onlineWorkerCount },
     { label: "异常", value: abnormalPointCount },
   ];
 
   const queueStats = [
-    { label: "待派单", value: filteredPoints.filter((point) => getPointStatus(point) === "待派单").length },
-    { label: "赶往中", value: filteredPoints.filter((point) => getPointStatus(point) === "已派单").length },
-    { label: "施工中", value: filteredPoints.filter((point) => getPointStatus(point) === "施工中").length },
-    { label: "待补素材", value: filteredPoints.filter((point) => getPointStatus(point) === "已上传素材").length },
+    { label: "待派", value: filteredPoints.filter((point) => getPointStatus(point) === "待派单").length },
+    { label: "赶往", value: filteredPoints.filter((point) => getPointStatus(point) === "已派单").length },
+    { label: "施工", value: filteredPoints.filter((point) => getPointStatus(point) === "施工中").length },
+    { label: "补素材", value: filteredPoints.filter((point) => getPointStatus(point) === "已上传素材").length },
     { label: "异常", value: filteredPoints.filter((point) => getPointAnomalies(point, data.photos, data.tasks, data.projects).length > 0).length },
-    { label: "待验收", value: filteredPoints.filter((point) => getPointStatus(point) === "待验收").length },
+    { label: "验收", value: filteredPoints.filter((point) => getPointStatus(point) === "待验收").length },
   ];
 
   return (
     <div className="mapMain map-console-page enterprise-page">
       <header className="mapPageHeader enterprise-page-header">
         <div className="enterprise-page-title">
-          <span>管理后台 / Map Console</span>
           <div className="enterprise-page-heading">地图调度</div>
         </div>
         <div className="enterprise-page-actions">
@@ -198,17 +197,8 @@ export function MapConsolePage({
         <aside className="enterprise-card mapQueuePanel">
           <div className="enterprise-card-header">
             <div>
-              <span>调度队列</span>
               <h3>待处理点位</h3>
             </div>
-          </div>
-          <div className="mapQueueMiniStats">
-            {queueMiniStats.map((item) => (
-              <div key={item.label}>
-                <span>{item.label}</span>
-                <b>{item.value}</b>
-              </div>
-            ))}
           </div>
           <div className="mapQueueSummary">
             {queueStats.map((item) => (
@@ -249,6 +239,14 @@ export function MapConsolePage({
             <div>
               <span>全国执行地图</span>
               <h3>调度画布</h3>
+            </div>
+            <div className="mapCanvasChips" aria-label="地图调度概览">
+              {mapCanvasChips.map((item) => (
+                <span key={item.label}>
+                  <small>{item.label}</small>
+                  <b>{item.value}</b>
+                </span>
+              ))}
             </div>
           </div>
           <div className="mapCanvasMain">

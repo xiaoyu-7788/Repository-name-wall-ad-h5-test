@@ -72,7 +72,7 @@ export function MapSidebar({
         {tab === "点位筛选" && (
           <div className="map-filter-list">
             <div className="dispatch-title">
-              <b>当前筛选点位</b>
+              <b>筛选结果</b>
               <span>{points.length} 个</span>
             </div>
             <button type="button" onClick={() => setSelectedIds(points.map((point) => point.id))}>全选当前筛选</button>

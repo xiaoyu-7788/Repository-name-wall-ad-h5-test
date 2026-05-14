@@ -73,7 +73,6 @@ export function DashboardPage({ data, activeProject, onNavigate, setActiveProjec
     <div className="dashboard-page enterprise-page">
       <header className="enterprise-page-header">
         <div className="enterprise-page-title">
-          <span>管理后台 / Overview</span>
           <div className="enterprise-page-heading">运营总览</div>
         </div>
         <div className="enterprise-page-actions">
