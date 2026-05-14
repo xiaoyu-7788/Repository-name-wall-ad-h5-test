@@ -276,6 +276,11 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     await resetDemoData(page);
     await goPage(page, "地图调度 Map Console", "地图调度");
     await expect(page.locator(".amap-shell")).toBeVisible();
+    const mapBox = await page.locator('[data-testid="map-main-canvas"]').boundingBox();
+    expect(mapBox).toBeTruthy();
+    expect(mapBox.width).toBeGreaterThan(700);
+    expect(mapBox.height).toBeGreaterThan(520);
+    await expect(page.locator(".mapDetailPanel [data-testid=\"map-main-canvas\"]")).toHaveCount(0);
     await expect(page.locator(".amap-map-badges")).toContainText("点位");
     await expect(page.locator(".amap-map-badges")).toContainText("小车");
     await expect(page.locator(".map-toolbar").getByRole("button", { name: "调度视图" })).toBeVisible();

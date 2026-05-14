@@ -44,7 +44,7 @@ export function MapConsolePage({
   const [showLabels, setShowLabels] = useState(true);
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [currentProjectOnly, setCurrentProjectOnly] = useState(true);
-  const [sideTab, setSideTab] = useState("点位筛选");
+  const [sideTab, setSideTab] = useState("点位详情");
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [areaSelection, setAreaSelection] = useState(null);
   const projects = normalizeProjects(data.projects, data.points);
@@ -156,9 +156,9 @@ export function MapConsolePage({
         </div>
       </header>
 
-      <section className="enterprise-kpi-grid">
+      <section className="mapKpiStrip">
         {mapSummaryCards.map((item) => (
-          <article key={item.label} className="enterprise-kpi-card">
+          <article key={item.label} className="enterprise-kpi-card mapKpiCard">
             <span>{item.label}</span>
             <b>{item.value}</b>
             <small>{item.hint}</small>
@@ -166,7 +166,7 @@ export function MapConsolePage({
         ))}
       </section>
 
-      <section className="enterprise-card">
+      <section className="enterprise-card mapToolbarPanel">
         <MapToolbar
           projects={projects}
           activeProject={activeProject}
@@ -196,12 +196,12 @@ export function MapConsolePage({
         />
       </section>
 
-      <section className="enterprise-three-column enterprise-map-layout map-console-layout">
-        <section className="enterprise-card map-queue-panel">
+      <section className="mapDispatchShell map-console-layout">
+        <aside className="enterprise-card mapQueuePanel">
           <div className="enterprise-card-header">
             <div>
               <span>调度队列</span>
-              <h3>点位池与状态分布</h3>
+              <h3>待处理点位</h3>
             </div>
           </div>
           <div className="mapQueueSummary">
@@ -236,47 +236,49 @@ export function MapConsolePage({
               </button>
             ))}
           </div>
-        </section>
+        </aside>
 
-        <section className="enterprise-card">
+        <section className="enterprise-card mapCanvasPanel" data-testid="map-main-canvas">
           <div className="enterprise-card-header">
             <div>
-              <span>地图</span>
+              <span>全国执行地图</span>
               <h3>调度画布</h3>
             </div>
           </div>
-          <AmapView
-            points={filteredPoints}
-            workers={activeWorkers}
-            photos={data.photos}
-            selectedPoint={selectedPoint}
-            selectedWorker={selectedWorker}
-            selectedIds={selectedIds}
-            mapMode={mapMode}
-            viewMode={viewMode}
-            selectionMode={selectionMode}
-            showPoints={showPoints}
-            showWorkers={showWorkers}
-            showLabels={showLabels}
-            onlineOnly={onlineOnly}
-            onSelectPoint={(point) => {
-              setSelectedPointId(point.id);
-              setSideTab("点位详情");
-            }}
-            onSelectWorker={(worker) => {
-              setSelectedWorkerId(worker.id);
-              setSideTab("师傅详情");
-            }}
-            onTogglePointSelection={togglePointSelection}
-            onAreaSelect={handleAreaSelect}
-          />
+          <div className="mapCanvasMain">
+            <AmapView
+              points={filteredPoints}
+              workers={activeWorkers}
+              photos={data.photos}
+              selectedPoint={selectedPoint}
+              selectedWorker={selectedWorker}
+              selectedIds={selectedIds}
+              mapMode={mapMode}
+              viewMode={viewMode}
+              selectionMode={selectionMode}
+              showPoints={showPoints}
+              showWorkers={showWorkers}
+              showLabels={showLabels}
+              onlineOnly={onlineOnly}
+              onSelectPoint={(point) => {
+                setSelectedPointId(point.id);
+                setSideTab("点位详情");
+              }}
+              onSelectWorker={(worker) => {
+                setSelectedWorkerId(worker.id);
+                setSideTab("师傅详情");
+              }}
+              onTogglePointSelection={togglePointSelection}
+              onAreaSelect={handleAreaSelect}
+            />
+          </div>
         </section>
 
-        <section className="enterprise-card map-detail-panel">
+        <aside className="enterprise-card mapDetailPanel">
           <div className="enterprise-card-header">
             <div>
               <span>当前详情</span>
-              <h3>点位与师傅状态</h3>
+              <h3>点位与调度建议</h3>
             </div>
           </div>
           <MapSidebar
@@ -305,7 +307,7 @@ export function MapConsolePage({
               setSideTab("点位详情");
             }}
           />
-        </section>
+        </aside>
       </section>
     </div>
   );
