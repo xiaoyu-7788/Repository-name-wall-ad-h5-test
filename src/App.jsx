@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { isLocalDataMode } from "./apiClient";
+import { getCurrentUser, isLocalDataMode, logoutUser } from "./apiClient";
 import { supabaseEnv } from "./supabaseClient";
 import { useH5Data } from "./hooks/useH5Data";
 import { AdminLayout } from "./components/layout/AdminLayout";
@@ -14,11 +14,14 @@ import {
   WorkerPage,
 } from "./components/shared/legacyModals";
 import { DashboardPage } from "./pages/DashboardPage";
+import { AccountsPage } from "./pages/AccountsPage";
 import { DispatchPage } from "./pages/DispatchPage";
+import { LoginPage } from "./pages/LoginPage";
 import { MapConsolePage } from "./pages/MapConsolePage";
 import { MediaPage } from "./pages/MediaPage";
 import { PointsPage } from "./pages/PointsPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { RegisterPage } from "./pages/RegisterPage";
 import { SystemHealthPage } from "./pages/SystemHealthPage";
 import { WorkersPage } from "./pages/WorkersPage";
 import {
@@ -33,7 +36,7 @@ import {
 } from "./lib/domain";
 import "./styles.css";
 
-function AdminWorkspace({ data, initialPage = "dashboard" }) {
+function AdminWorkspace({ data, initialPage = "dashboard", currentUser, onLogout }) {
   const [activePage, setActivePage] = useState(initialPage);
   const [activeProject, setActiveProject] = useState("all");
   const [collapsed, setCollapsed] = useState(false);
@@ -229,6 +232,9 @@ function AdminWorkspace({ data, initialPage = "dashboard" }) {
     if (activePage === "system") {
       return <SystemHealthPage data={data} onRunDiagnosis={data.diagnose} />;
     }
+    if (activePage === "accounts") {
+      return <AccountsPage currentUser={currentUser} />;
+    }
     return <DashboardPage data={data} activeProject={activeProject} onNavigate={navigate} setActiveProject={setActiveProject} />;
   }
 
@@ -252,6 +258,8 @@ function AdminWorkspace({ data, initialPage = "dashboard" }) {
         if (value.trim() && ["dashboard", "system"].includes(activePage)) navigate("points");
       }}
       onQuickAction={handleQuickAction}
+      currentUser={currentUser}
+      onLogout={onLogout}
     >
       {isLocalDataMode && (
         <section className="warn">
@@ -319,22 +327,118 @@ function AdminWorkspace({ data, initialPage = "dashboard" }) {
   );
 }
 
+const DEV_PREVIEW_TOKEN = "dev-preview-token";
+const DEV_PREVIEW_USER = {
+  id: "dev-preview-admin",
+  username: "测试管理员",
+  name: "测试管理员",
+  phone: "13291116876",
+  role: "admin",
+  status: "active",
+};
+const enableDevPreviewLogin = import.meta.env.DEV || String(import.meta.env.VITE_ENABLE_DEV_LOGIN || "").toLowerCase() === "true";
+
+function readDevPreviewUser() {
+  if (!enableDevPreviewLogin || typeof window === "undefined") return null;
+  if (window.localStorage.getItem("admin_token") !== DEV_PREVIEW_TOKEN) return null;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem("admin_user") || "{}");
+    return {
+      ...DEV_PREVIEW_USER,
+      ...stored,
+      username: stored.username || stored.name || DEV_PREVIEW_USER.username,
+      status: stored.status || "active",
+    };
+  } catch {
+    return DEV_PREVIEW_USER;
+  }
+}
+
+function clearDevPreviewUser() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem("admin_token");
+  window.localStorage.removeItem("admin_user");
+}
+
 function App() {
   const route = getRoute();
   const data = useH5Data();
+  const authBypass = supabaseEnv.forceLocalDemo;
+  const devPreviewUser = readDevPreviewUser();
+  const [currentUser, setCurrentUser] = useState(authBypass ? { id: "local", username: "本地演示", role: "super_admin", status: "active" } : devPreviewUser);
+  const [authLoading, setAuthLoading] = useState(!authBypass && !devPreviewUser);
+
+  useEffect(() => {
+    if (route.page === "worker" || route.page === "mobile-map" || route.page === "login" || route.page === "register") {
+      setAuthLoading(false);
+      return undefined;
+    }
+    if (authBypass) {
+      setCurrentUser({ id: "local", username: "本地演示", role: "super_admin", status: "active" });
+      setAuthLoading(false);
+      return undefined;
+    }
+    if (devPreviewUser) {
+      setCurrentUser(devPreviewUser);
+      setAuthLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setAuthLoading(true);
+    getCurrentUser()
+      .then((user) => {
+        if (!cancelled) setCurrentUser(user);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCurrentUser(null);
+        const next = `${window.location.pathname}${window.location.search}`;
+        window.history.replaceState({}, "", `/login?next=${encodeURIComponent(next)}`);
+      })
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [route.page, authBypass, devPreviewUser?.id]);
 
   useEffect(() => {
     if (route.page === "worker") {
       if (supabaseEnv.forceLocalDemo) data.loadWorkerTasks(route.workerId);
       return undefined;
     }
+    if (route.page === "login" || route.page === "register") return undefined;
+    if (route.page === "mobile-map") {
+      if (authBypass) data.loadAll();
+      return undefined;
+    }
+    if (!authBypass && !currentUser) return undefined;
     data.loadAll();
     return undefined;
-  }, [route.page, route.workerId]);
+  }, [route.page, route.workerId, authBypass, currentUser?.id]);
+
+  function handleLogin(user) {
+    setCurrentUser(user);
+    const url = new URL(window.location.href);
+    const next = url.searchParams.get("next") || "/admin/dashboard";
+    window.history.replaceState({}, "", next);
+  }
+
+  async function handleLogout() {
+    await logoutUser().catch(() => null);
+    clearDevPreviewUser();
+    setCurrentUser(null);
+    window.history.replaceState({}, "", "/login");
+  }
 
   if (route.page === "worker") return <WorkerPage data={data} workerId={route.workerId} />;
   if (route.page === "mobile-map") return <MobileMapPack data={data} />;
-  return <AdminWorkspace data={data} initialPage={route.adminPage || "dashboard"} />;
+  if (route.page === "register") return <RegisterPage />;
+  if (route.page === "login") return <LoginPage onLogin={handleLogin} />;
+  if (authLoading) return <main className="auth-shell"><section className="auth-card">正在验证登录状态...</section></main>;
+  if (!authBypass && !currentUser) return <LoginPage onLogin={handleLogin} />;
+  return <AdminWorkspace data={data} initialPage={route.adminPage || "dashboard"} currentUser={currentUser} onLogout={handleLogout} />;
 }
 
 createRoot(document.getElementById("root")).render(<App />);

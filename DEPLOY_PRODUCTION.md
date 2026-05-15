@@ -1,258 +1,255 @@
-# 公网正式部署指南
+# wall.hc12345.com 生产发布指南
 
-本文档用于把《全国墙体广告执行坐标系统》部署到公网 HTTPS 域名，供办公室后台和全国各地师傅移动端 H5 使用。
+本文档用于 Ubuntu 24.04 + Nginx + PM2 + Node 的正式发布和回滚。
 
-推荐方案是一台云服务器运行 Node/Express，由 Nginx 反向代理并配置 HTTPS。这样后台、师傅端、API 和上传文件都在同一个 origin 下，能避免跨域、localhost 链接、上传文件丢失和 Serverless 冷启动问题。
-
-## 目标访问地址
-
-- 后台：`https://你的域名/admin`
-- 师傅端：`https://你的域名/worker/tk_XXXXXXXXXXXX`
-- 健康检查：`https://你的域名/api/health`
-- 诊断接口：`https://你的域名/api/debug-state`
-- 上传文件：`https://你的域名/uploads/...`
-
-## 服务器准备
-
-建议环境：
-
-- Ubuntu 22.04 LTS 或同类 Linux 云服务器
-- Node.js 20+
-- npm
-- git
-- nginx
-- pm2
-- certbot 或云厂商 HTTPS 证书
-
-示例安装：
-
-```bash
-node -v
-npm -v
-npm install -g pm2
-sudo apt update
-sudo apt install -y nginx certbot python3-certbot-nginx
-```
-
-## 部署目录
-
-示例目录：
+正式域名：
 
 ```text
-/opt/wall-ad-h5/
-  dist/
-  server/
-    data/db.json
-    uploads/
-  .env.production
+https://wall.hc12345.com
 ```
 
-`server/data/db.json` 和 `server/uploads/` 是当前版本的核心持久化数据，必须纳入备份并避免发布时覆盖。
+## 生产约定
 
-## 拉取与构建
+- 生产域名：`https://wall.hc12345.com`
+- PM2 进程名：`wall-ad-h5`
+- Node 端口：`8787`
+- 源码目录：`/www/wall-ad-system/wall_ad_h5_test`
+- Release 目录：`/www/wall-ad-system/releases`
+- 当前版本软链接：`/www/wall-ad-system/current`
+- 共享数据目录：`/www/wall-ad-system/shared/server/data`
+- 共享上传目录：`/www/wall-ad-system/shared/server/uploads`
+- Nginx 前端根目录：`/www/wall-ad-system/current/dist`
+
+前端生产 API 请求必须走同域相对路径 `/api/...`。不要把 `localhost:5173`、`127.0.0.1:5173` 或临时测试地址写进生产配置。
+
+## 一键发布
+
+在服务器执行：
 
 ```bash
-cd /opt
-git clone <你的仓库地址> wall-ad-h5
-cd /opt/wall-ad-h5
-npm install
-npm run build
+cd /www/wall-ad-system/wall_ad_h5_test
+npm run deploy:prod
 ```
 
-如果是更新已有服务，请先备份：
+脚本会自动执行：
+
+1. `npm install`
+2. `npm run build:prod`
+3. 检查 `dist/index.html`
+4. 拒绝发布包含 `localhost:5173`、`127.0.0.1:5173`、`VITE_ENABLE_DEV_LOGIN=true` 的构建产物
+5. 创建 `/www/wall-ad-system/releases/YYYYMMDD_HHMMSS`
+6. 复制 `dist`、`server`、`deploy`、`scripts`、`public`、`package.json`、`package-lock.json`、`ecosystem.config.cjs`、`.env.production`
+7. 将 release 内的 `server/data` 和 `server/uploads` 指向 shared 目录
+8. 在 release 内安装生产依赖
+9. 更新 `/www/wall-ad-system/current` 软链接
+10. `pm2 restart wall-ad-h5 --update-env`
+11. `pm2 save`
+12. 检查 `https://wall.hc12345.com` 和 `https://wall.hc12345.com/api/health`
+
+发布成功后脚本会输出正式站点地址、当前 release 路径、回滚命令和 PM2 状态。
+
+## 一键回滚
+
+在服务器执行：
 
 ```bash
-cp server/data/db.json server/data/db.json.$(date +%F-%H%M%S).bak
-tar -czf uploads.$(date +%F-%H%M%S).tar.gz server/uploads
+cd /www/wall-ad-system/wall_ad_h5_test
+npm run rollback:prod
 ```
 
-## 生产环境变量
+脚本会自动找到 `releases` 目录下除当前版本外最新的上一版，切换 `current` 软链接，重启 `wall-ad-h5`，保存 PM2，并执行健康检查。
 
-在服务器项目根目录创建 `.env.production`，真实 Key 只放服务器或云平台环境变量，不提交仓库。
+## 快捷命令
+
+```bash
+npm run build:prod
+npm run deploy:prod
+npm run rollback:prod
+npm run pm2:restart
+npm run test:prod
+```
+
+## .env.production
+
+`.env.production` 只放在服务器，不提交仓库。关键配置示例：
 
 ```env
+NODE_ENV=production
+PORT=8787
 VITE_DATA_MODE=mock-server
 VITE_API_BASE_URL=
-VITE_PUBLIC_APP_ORIGIN=https://你的域名
-VITE_AMAP_KEY=你的高德Web端JSAPIKey
-VITE_AMAP_SECURITY_CODE=你的高德安全密钥
-PUBLIC_APP_ORIGIN=https://你的域名
-PORT=8787
+VITE_PUBLIC_APP_ORIGIN=https://wall.hc12345.com
+PUBLIC_APP_ORIGIN=https://wall.hc12345.com
+APP_ORIGIN=https://wall.hc12345.com
+CORS_ORIGIN=https://wall.hc12345.com
+SESSION_SECRET=请填写32位以上随机字符串
+JWT_SECRET=请填写32位以上随机字符串
+ADMIN_USERNAME=请填写初始管理员用户名
+ADMIN_PHONE=请填写初始管理员手机号
+ADMIN_PASSWORD=请填写初始管理员密码
+VITE_ENABLE_DEV_LOGIN=false
 ```
 
-关键说明：
+注意：
 
-- `VITE_API_BASE_URL` 公网同源部署请留空，前端会请求同域名 `/api/...`。
-- `VITE_PUBLIC_APP_ORIGIN` 用于后台复制师傅链接，生产必须固定为 HTTPS 公网域名。
-- `PUBLIC_APP_ORIGIN` 用于服务端 health 和链接诊断，建议与前端 origin 一致。
-- 高德 Key 必须在高德控制台绑定正式域名 Referer。
+- `VITE_API_BASE_URL` 生产环境保持为空，前端会使用 `/api/...`。
+- `VITE_ENABLE_DEV_LOGIN` 生产必须为 `false` 或不配置。
+- `ADMIN_PASSWORD` 不要写进 README、测试报告或仓库。
+- 首次启动时，如果业务数据里没有 `super_admin`，后端会读取 `ADMIN_USERNAME`、`ADMIN_PHONE`、`ADMIN_PASSWORD` 自动创建，并用 bcrypt 保存密码 hash。
 
-修改 `VITE_` 变量后必须重新执行 `npm run build`。
+## Nginx
 
-## 启动 Node/Express
+最终 HTTPS 配置文件：
 
-本地验证：
+```text
+deploy/nginx/wall.hc12345.com.conf
+```
+
+启用方式：
 
 ```bash
-PORT=8787 npm run start
-```
-
-使用 pm2 常驻：
-
-```bash
-pm2 start server/index.js --name wall-ad-h5 --time
-pm2 save
-pm2 startup
-```
-
-查看日志：
-
-```bash
-pm2 logs wall-ad-h5
-```
-
-重启：
-
-```bash
-npm run build
-pm2 restart wall-ad-h5
-```
-
-## Nginx 反向代理
-
-创建 `/etc/nginx/sites-available/wall-ad-h5`：
-
-```nginx
-server {
-    listen 80;
-    server_name 你的域名;
-
-    client_max_body_size 200m;
-
-    location / {
-        proxy_pass http://127.0.0.1:8787;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-启用配置：
-
-```bash
-sudo ln -s /etc/nginx/sites-available/wall-ad-h5 /etc/nginx/sites-enabled/wall-ad-h5
+sudo cp /www/wall-ad-system/current/deploy/nginx/wall.hc12345.com.conf /etc/nginx/sites-available/wall-ad-system
+sudo ln -sf /etc/nginx/sites-available/wall-ad-system /etc/nginx/sites-enabled/wall-ad-system
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-`client_max_body_size` 需要覆盖现场视频和批量素材上传的实际大小。
+当前配置要点：
 
-## HTTPS
+- `server_name wall.hc12345.com`
+- `root /www/wall-ad-system/current/dist`
+- `/api/` 反代到本机 `8787` 端口
+- `/uploads/` 指向 `/www/wall-ad-system/shared/server/uploads/`
+- `/admin`、`/worker/tk_...` 等前端路由刷新回退到 `index.html`
 
-使用 certbot 示例：
+## PM2
 
-```bash
-sudo certbot --nginx -d 你的域名
-sudo systemctl reload nginx
-```
-
-HTTPS 是正式使用的硬要求：
-
-- 手机浏览器持续定位通常要求 HTTPS。
-- 师傅 token 链接必须通过 HTTPS 发给外地师傅。
-- 高德 Web JS API 的 Referer、域名和安全密钥需要与 HTTPS 域名匹配。
-
-## 上传目录持久化
-
-当前版本上传文件默认保存在：
+PM2 配置文件：
 
 ```text
-server/uploads/
+ecosystem.config.cjs
 ```
 
-生产服务器请确保：
-
-- 发布新版本时不要删除 `server/uploads/`。
-- Nginx 和 Node 运行用户对目录有读写权限。
-- 服务器磁盘容量足够，尤其是视频和 ZIP 批量下载前的素材积累。
-- 至少每日备份 `server/uploads/`。
-
-权限示例：
-
-```bash
-mkdir -p server/uploads server/data
-chmod -R 755 server/uploads server/data
-```
-
-## 数据备份
-
-当前版本业务数据默认保存在：
+进程名固定为：
 
 ```text
-server/data/db.json
+wall-ad-h5
 ```
 
-建议最低备份策略：
+PM2 从 `/www/wall-ad-system/current` 启动：
 
 ```bash
-mkdir -p /opt/backups/wall-ad-h5
-cp /opt/wall-ad-h5/server/data/db.json /opt/backups/wall-ad-h5/db.$(date +%F-%H%M%S).json
-tar -czf /opt/backups/wall-ad-h5/uploads.$(date +%F-%H%M%S).tar.gz -C /opt/wall-ad-h5/server uploads
+pm2 start /www/wall-ad-system/current/ecosystem.config.cjs --only wall-ad-h5
+pm2 save
+pm2 status wall-ad-h5
 ```
 
-可加入 crontab：
+不要把进程改名为其他名称，否则发布脚本和回滚脚本会找不到服务。
+
+## 上线后验收
+
+服务器执行：
 
 ```bash
-0 3 * * * /bin/bash /opt/wall-ad-h5/scripts/backup.sh
+cd /www/wall-ad-system/wall_ad_h5_test
+npm run test:prod
+curl -I https://wall.hc12345.com
+curl https://wall.hc12345.com/api/health
+pm2 status wall-ad-h5
 ```
 
-如果团队规模扩大，建议迁移到 PostgreSQL/MySQL + 对象存储，并保留 token、派单、素材分类和项目级规则字段。
+浏览器人工检查：
 
-## 为什么不建议只依赖 Vercel Serverless
+1. 打开 `https://wall.hc12345.com`
+2. 未登录时进入登录页
+3. 使用正式账号登录后进入新版后台
+4. 打开运营总览、地图调度、点位管理、师傅管理、派单中心、项目管理、素材管理、系统状态
+5. 素材管理应为新版卡片网格，不应出现旧版表格素材管理
+6. 素材管理应支持单击选中、Ctrl/Cmd 多选、Shift 连续多选、鼠标框选、双击预览、视频可见、下载已选 ZIP
+7. 师傅端 `https://wall.hc12345.com/worker/tk_...` 不应被后台登录拦截
+8. `/api/health` 返回正常，且链接 origin 为 `https://wall.hc12345.com`
 
-本系统可以构建为 Vite 前端，但当前正式使用更适合云服务器 Node/Express，而不是只放在 Vercel Serverless：
+## 常见问题
 
-- 师傅上传的照片和视频需要稳定持久化，Serverless 本地文件系统通常不可持久保存。
-- ZIP 批量下载和大文件上传更适合长连接/可控磁盘的 Node 服务。
-- 师傅实时定位、小车 Marker 和 debug-state 需要稳定读写同一份状态数据。
-- 国内公网访问、域名备案、Nginx 上传大小限制和 HTTPS 证书更适合在云服务器统一控制。
-- Vercel 仍可作为纯静态前端/CDN 方案，但必须另配稳定后端、数据库和对象存储。
+### 1. 发布脚本拒绝发布 VITE_ENABLE_DEV_LOGIN=true
 
-## 上线前检查清单
-
-部署后依次检查：
-
-- `https://你的域名/api/health` 返回 `ok: true`，且 public origin 是公网 HTTPS 域名。
-- `https://你的域名/api/debug-state` 可返回 projects、workers、points、tasks、pointMedia。
-- `/admin` 可打开后台，8 个一级导航均可访问。
-- 后台项目切换、时间范围、全局搜索和快捷动作可用。
-- 高德地图显示真实底图，点位 Marker 和小车 Marker 可见。
-- 框选/圈选可在地图上拖动并选中区域点位。
-- 新增师傅后复制链接不是 localhost，而是 `https://你的域名/worker/tk_...`。
-- 停用师傅后 token 链接失效，重置链接后旧 token 失效。
-- 派单后师傅端能读取任务。
-- 师傅端固定身份，不显示姓名/手机号/车牌输入框。
-- 手机端左右滑动可以切换上一点位/下一点位。
-- 手机端 HTTPS 定位授权后，后台小车位置可更新。
-- 上传现场照片、720 全景、水印照片、凯立德图片、墙租协议图片和视频后，后台素材可见。
-- 项目级素材规则能正确影响齐套状态和点位状态。
-- 素材管理当前筛选结果可以导出 manifest，也可以下载 ZIP。
-- ZIP 内目录为 `项目名称/点位编号/素材分类/文件名`。
-
-## 回滚建议
-
-上线前保留上一版代码、`db.json` 和 `uploads` 备份。若新版本异常：
+编辑服务器 `.env.production`：
 
 ```bash
-git checkout <上一版提交>
-npm install
-npm run build
-cp <备份db.json> server/data/db.json
-tar -xzf <备份uploads.tar.gz> -C server
-pm2 restart wall-ad-h5
+VITE_ENABLE_DEV_LOGIN=false
 ```
 
-不要使用会误删上传目录或数据文件的发布脚本。
+然后重新执行：
+
+```bash
+npm run deploy:prod
+```
+
+### 2. Nginx 刷新 `/admin/media` 404
+
+确认 Nginx 使用了：
+
+```nginx
+location / {
+    try_files $uri $uri/ /index.html;
+}
+```
+
+并确认 `root` 指向：
+
+```text
+/www/wall-ad-system/current/dist
+```
+
+### 3. 上传文件 404
+
+确认 Nginx `/uploads/` alias 指向：
+
+```text
+/www/wall-ad-system/shared/server/uploads/
+```
+
+确认目录权限允许 Nginx 读取。
+
+### 4. PM2 不是 online
+
+执行：
+
+```bash
+pm2 logs wall-ad-h5 --lines 100
+pm2 restart wall-ad-h5 --update-env
+pm2 status wall-ad-h5
+```
+
+### 5. 新版上线异常
+
+立即回滚：
+
+```bash
+cd /www/wall-ad-system/wall_ad_h5_test
+npm run rollback:prod
+```
+
+回滚后再检查：
+
+```bash
+curl -I https://wall.hc12345.com
+curl https://wall.hc12345.com/api/health
+pm2 status wall-ad-h5
+```
+
+## 后续新版本快速上线
+
+以后确认新版后，只需要在服务器执行：
+
+```bash
+cd /www/wall-ad-system/wall_ad_h5_test
+git pull
+npm run deploy:prod
+```
+
+如需回滚：
+
+```bash
+npm run rollback:prod
+```

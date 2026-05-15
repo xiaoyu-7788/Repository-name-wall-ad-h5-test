@@ -4,17 +4,24 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
+    "build:prod": "vite build",
     "start": "node server/index.js",
     "serve:prod": "npm run build && node server/index.js",
     "preview": "vite preview --host 0.0.0.0",
     "test:e2e": "playwright test",
     "dev:api": "node server/index.js",
     "dev:all": "concurrently \"npm run dev:api\" \"npm run dev -- --host 0.0.0.0\"",
-    "test:api": "node server/test-api.js"
+    "test:api": "node server/test-api.js",
+    "test:supabase": "node scripts/supabase-real-test.mjs",
+    "test:prod": "node scripts/production-health-check.mjs",
+    "deploy:prod": "bash scripts/deploy-production.sh",
+    "rollback:prod": "bash scripts/rollback-production.sh",
+    "pm2:restart": "pm2 restart wall-ad-h5 && pm2 save"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "bcryptjs": "^3.0.3",
     "concurrently": "^9.2.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",

@@ -40,12 +40,12 @@ export function PointDetailDrawer({ point, photos, tasks, workers, onClose, onEd
   const ready = isPointReadyForAcceptance(point, photos, projects);
 
   const modal = (
-    <div className="detailOverlay" role="dialog" aria-modal="true">
+    <div className="detailOverlay enterprise-modal-overlay" role="dialog" aria-modal="true">
       <button className="detailOverlayScrim" type="button" aria-label="关闭详情弹窗" onClick={onClose} />
-      <section className="detailModal pointDetailModal">
+      <section className="detailModal pointDetailModal enterprise-modal">
         <header className="pointDetailModalHeader">
           <div className="pointDetailHeading">
-            <small>点位详情 / Point Detail</small>
+            <small>点位详情</small>
             <h2>{mapped.code}</h2>
             <p>{mapped.address}</p>
           </div>

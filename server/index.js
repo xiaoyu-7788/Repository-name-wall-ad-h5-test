@@ -1,4 +1,6 @@
+const bcrypt = require("bcryptjs");
 const cors = require("cors");
+const crypto = require("node:crypto");
 const express = require("express");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -11,6 +13,25 @@ const UPLOAD_DIR = path.join(ROOT, "uploads");
 const DB_PATH = path.join(DATA_DIR, "db.json");
 const DIST_DIR = path.join(ROOT, "..", "dist");
 const DIST_INDEX = path.join(DIST_DIR, "index.html");
+const SESSION_COOKIE_NAME = "wall_ad_session";
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+const USER_ROLES = ["super_admin", "admin", "dispatcher", "viewer"];
+const USER_STATUSES = ["pending", "active", "disabled"];
+
+loadEnvFile(path.join(ROOT, "..", ".env.production"));
+
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  const raw = fs.readFileSync(filePath, "utf8");
+  raw.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("=")) return;
+    const index = trimmed.indexOf("=");
+    const key = trimmed.slice(0, index).trim();
+    const value = trimmed.slice(index + 1).trim().replace(/^["']|["']$/g, "");
+    if (key && process.env[key] === undefined) process.env[key] = value;
+  });
+}
 
 function nowIso() {
   return new Date().toISOString();
@@ -185,6 +206,7 @@ function demoDb() {
     pointMedia: [],
     trackLogs: [],
     workerLocations: [],
+    users: [],
   };
 }
 
@@ -192,20 +214,24 @@ function ensureDirs() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, `${JSON.stringify(normalizeDb(demoDb()), null, 2)}\n`);
+    const adminResult = ensureInitialSuperAdmin(normalizeDb(demoDb()));
+    fs.writeFileSync(DB_PATH, `${JSON.stringify(adminResult.db, null, 2)}\n`);
     return;
   }
   try {
     const raw = fs.readFileSync(DB_PATH, "utf8");
     const parsed = JSON.parse(raw);
-    const normalized = normalizeDb(parsed);
+    let normalized = normalizeDb(parsed);
+    const adminResult = ensureInitialSuperAdmin(normalized);
+    normalized = adminResult.db;
     const needsWorkerMigration = normalized.workers.some((worker) => {
       const original = parsed.workers?.find((item) => String(item.id) === String(worker.id));
       return !original?.accessToken || !Object.prototype.hasOwnProperty.call(original || {}, "lastSeenAt");
     });
-    if (needsWorkerMigration) fs.writeFileSync(DB_PATH, `${JSON.stringify(normalized, null, 2)}\n`);
+    if (needsWorkerMigration || adminResult.changed) fs.writeFileSync(DB_PATH, `${JSON.stringify(normalized, null, 2)}\n`);
   } catch {
-    fs.writeFileSync(DB_PATH, `${JSON.stringify(normalizeDb(demoDb()), null, 2)}\n`);
+    const adminResult = ensureInitialSuperAdmin(normalizeDb(demoDb()));
+    fs.writeFileSync(DB_PATH, `${JSON.stringify(adminResult.db, null, 2)}\n`);
   }
 }
 
@@ -313,6 +339,57 @@ function normalizeWorker(worker, index, db = {}) {
   };
 }
 
+function normalizeUser(user = {}) {
+  const now = nowIso();
+  const role = USER_ROLES.includes(user.role) ? user.role : "viewer";
+  const status = USER_STATUSES.includes(user.status) ? user.status : "pending";
+  return {
+    id: user.id || uid("user"),
+    username: String(user.username || "").trim(),
+    phone: String(user.phone || "").trim(),
+    email: String(user.email || "").trim(),
+    passwordHash: user.passwordHash || user.password_hash || "",
+    role,
+    status,
+    createdAt: user.createdAt || user.created_at || now,
+    updatedAt: user.updatedAt || user.updated_at || now,
+  };
+}
+
+function sanitizeUser(user = {}) {
+  const normalized = normalizeUser(user);
+  const { passwordHash, ...safeUser } = normalized;
+  return safeUser;
+}
+
+function adminEnvConfig() {
+  return {
+    username: String(process.env.ADMIN_USERNAME || "").trim(),
+    phone: String(process.env.ADMIN_PHONE || "").trim(),
+    password: String(process.env.ADMIN_PASSWORD || "").trim(),
+  };
+}
+
+function ensureInitialSuperAdmin(db = {}) {
+  const users = Array.isArray(db.users) ? db.users.map(normalizeUser) : [];
+  if (users.some((user) => user.role === "super_admin")) return { db: { ...db, users }, changed: false };
+  const admin = adminEnvConfig();
+  if (!admin.username || !admin.phone || !admin.password) return { db: { ...db, users }, changed: false };
+  const timestamp = nowIso();
+  const superAdmin = normalizeUser({
+    id: uid("user"),
+    username: admin.username,
+    phone: admin.phone,
+    email: "",
+    passwordHash: bcrypt.hashSync(admin.password, 12),
+    role: "super_admin",
+    status: "active",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  return { db: { ...db, users: [superAdmin, ...users] }, changed: true };
+}
+
 function normalizeDb(db) {
   const wallPoints = Array.isArray(db.wallPoints) ? db.wallPoints.map((point) => ({
     ...point,
@@ -326,6 +403,7 @@ function normalizeDb(db) {
     ...item,
     kind: normalizeMediaKind(item.kind || item.media_kind || item.file_name || item.url),
   })) : [];
+  const users = Array.isArray(db.users) ? db.users.map(normalizeUser) : [];
   return {
     projects: Array.isArray(db.projects) ? db.projects.map((project) => ({
       ...project,
@@ -340,6 +418,7 @@ function normalizeDb(db) {
     pointMedia,
     trackLogs: Array.isArray(db.trackLogs) ? db.trackLogs : [],
     workerLocations: Array.isArray(db.workerLocations) ? db.workerLocations : (Array.isArray(db.worker_locations) ? db.worker_locations : []),
+    users,
   };
 }
 
@@ -366,6 +445,212 @@ function ok(res, data = null, extra = {}) {
 
 function fail(res, status, error, detail = "") {
   return res.status(status).json({ ok: false, error, detail });
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  return Object.fromEntries(
+    header.split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const index = part.indexOf("=");
+        if (index === -1) return [part, ""];
+        return [part.slice(0, index), decodeURIComponent(part.slice(index + 1))];
+      }),
+  );
+}
+
+function base64UrlEncode(value) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function base64UrlDecode(value) {
+  return Buffer.from(value, "base64url").toString("utf8");
+}
+
+function getSessionSecret() {
+  const secret = String(process.env.SESSION_SECRET || process.env.JWT_SECRET || "").trim();
+  if (secret) return secret;
+  return process.env.NODE_ENV === "production" ? "" : "dev-only-wall-ad-session-secret";
+}
+
+function signSessionPayload(payload) {
+  const secret = getSessionSecret();
+  if (!secret) return "";
+  const body = base64UrlEncode(JSON.stringify(payload));
+  const signature = crypto.createHmac("sha256", secret).update(body).digest("base64url");
+  return `${body}.${signature}`;
+}
+
+function verifySessionToken(token = "") {
+  const secret = getSessionSecret();
+  if (!secret || !token.includes(".")) return null;
+  const [body, signature] = token.split(".");
+  const expected = crypto.createHmac("sha256", secret).update(body).digest("base64url");
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  } catch {
+    return null;
+  }
+  try {
+    const payload = JSON.parse(base64UrlDecode(body));
+    if (!payload.userId || !payload.exp || Date.now() > Number(payload.exp)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function createSessionToken(user) {
+  const issuedAt = Date.now();
+  return signSessionPayload({
+    userId: user.id,
+    iat: issuedAt,
+    exp: issuedAt + SESSION_TTL_SECONDS * 1000,
+  });
+}
+
+function isSecureCookieRequest(req) {
+  return process.env.NODE_ENV === "production" || req.secure || req.get("x-forwarded-proto") === "https";
+}
+
+function setSessionCookie(req, res, token) {
+  const parts = [
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${SESSION_TTL_SECONDS}`,
+  ];
+  if (isSecureCookieRequest(req)) parts.push("Secure");
+  res.setHeader("Set-Cookie", parts.join("; "));
+}
+
+function clearSessionCookie(req, res) {
+  const parts = [
+    `${SESSION_COOKIE_NAME}=`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    "Max-Age=0",
+  ];
+  if (isSecureCookieRequest(req)) parts.push("Secure");
+  res.setHeader("Set-Cookie", parts.join("; "));
+}
+
+function userFromRequest(req) {
+  const token = parseCookies(req)[SESSION_COOKIE_NAME];
+  const payload = verifySessionToken(token || "");
+  if (!payload) return null;
+  const db = readDb();
+  const user = db.users.find((item) => String(item.id) === String(payload.userId));
+  if (!user || user.status !== "active") return null;
+  return user;
+}
+
+function requireAuth(req, res, next) {
+  const user = userFromRequest(req);
+  if (!user) return fail(res, 401, "UNAUTHENTICATED", "请先登录。");
+  req.user = user;
+  return next();
+}
+
+function hasAnyRole(user, roles = []) {
+  return roles.includes(user?.role);
+}
+
+function canManageUsers(user) {
+  return hasAnyRole(user, ["super_admin", "admin"]);
+}
+
+function canMutateOperations(user) {
+  return hasAnyRole(user, ["super_admin", "admin", "dispatcher"]);
+}
+
+function canAdminMutate(user) {
+  return hasAnyRole(user, ["super_admin", "admin"]);
+}
+
+function safeComparePassword(password, hash) {
+  if (!password || !hash) return false;
+  try {
+    return bcrypt.compareSync(password, hash);
+  } catch {
+    return false;
+  }
+}
+
+function findUserByLogin(db, login) {
+  const value = String(login || "").trim();
+  return db.users.find((user) => [user.username, user.phone, user.email].filter(Boolean).some((item) => String(item) === value));
+}
+
+function userDuplicate(db, draft, currentId = "") {
+  return db.users.find((user) => String(user.id) !== String(currentId) && (
+    String(user.username || "") === String(draft.username || "")
+    || String(user.phone || "") === String(draft.phone || "")
+    || (draft.email && String(user.email || "") === String(draft.email))
+  ));
+}
+
+function requireApiPermission(req, res, next) {
+  const user = req.user;
+  const method = req.method.toUpperCase();
+  const pathName = req.path;
+  if (pathName.startsWith("/users")) {
+    return canManageUsers(user) ? next() : fail(res, 403, "FORBIDDEN", "无权限管理账号。");
+  }
+  if (method === "GET") return next();
+  if (pathName.startsWith("/dispatch") || pathName.startsWith("/wall-points") || pathName.startsWith("/points") || pathName.startsWith("/point-media") || pathName.startsWith("/track-logs") || pathName.startsWith("/complete-point")) {
+    return canMutateOperations(user) ? next() : fail(res, 403, "FORBIDDEN", "当前账号无权修改点位、派单或素材。");
+  }
+  if (pathName.startsWith("/workers") || pathName.startsWith("/projects") || pathName.startsWith("/import-demo") || pathName.startsWith("/reset-demo")) {
+    return canAdminMutate(user) ? next() : fail(res, 403, "FORBIDDEN", "当前账号无权执行该后台管理操作。");
+  }
+  return canAdminMutate(user) ? next() : fail(res, 403, "FORBIDDEN", "当前账号无权执行该操作。");
+}
+
+function isWorkerPublicApi(req) {
+  const method = req.method.toUpperCase();
+  const pathName = req.path;
+  if (method === "GET" && pathName.startsWith("/worker-tasks")) return true;
+  if (method === "GET" && /^\/workers\/[^/]+$/.test(pathName)) return true;
+  if (method === "POST" && /^\/workers\/[^/]+\/(heartbeat|offline)$/.test(pathName)) return true;
+  if (method === "POST" && pathName === "/worker-location") return true;
+  if (method === "POST" && pathName.startsWith("/point-media/")) return true;
+  return false;
+}
+
+function authGate(req, res, next) {
+  if (isWorkerPublicApi(req)) return next();
+  return requireAuth(req, res, (error) => {
+    if (error) return next(error);
+    return requireApiPermission(req, res, next);
+  });
+}
+
+function publicWorkerTokenFromRequest(req) {
+  return String(req.body?.workerToken || req.body?.worker_token || req.body?.accessToken || req.body?.access_token || req.body?.workerId || req.body?.worker_id || req.params?.workerId || req.params?.id || req.query?.workerId || req.query?.worker || req.query?.worker_id || "").trim();
+}
+
+function authenticatedOrWorkerToken(req, db, identifier) {
+  const authUser = userFromRequest(req);
+  if (authUser && canMutateOperations(authUser)) return { type: "user", user: authUser };
+  const match = findWorkerMatch(db, identifier);
+  if (!match || workerAccessToken(match.worker) !== String(identifier || "")) return null;
+  if (match.worker.enabled === false) return { type: "disabled-worker", worker: match.worker };
+  return { type: "worker", worker: match.worker };
+}
+
+function cleanupUploadedFiles(files = []) {
+  files.forEach((file) => {
+    try {
+      if (file?.path && fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    } catch {
+      // Best effort cleanup for rejected uploads.
+    }
+  });
 }
 
 function upsert(list, item) {
@@ -514,21 +799,125 @@ function buildWorkerTasksPayload(db, workerQuery) {
   };
 }
 
+function normalizeOrigin(value) {
+  return String(value || "").trim().replace(/\/+$/, "");
+}
+
+function firstConfiguredOrigin(names = []) {
+  for (const name of names) {
+    const value = normalizeOrigin(process.env[name]);
+    if (value) return value;
+  }
+  return "";
+}
+
+function configuredPublicAppOrigin() {
+  return firstConfiguredOrigin(["PUBLIC_APP_ORIGIN", "APP_ORIGIN", "VITE_PUBLIC_APP_ORIGIN"]);
+}
+
+function configuredCorsOrigins() {
+  const raw = String(
+    process.env.CORS_ORIGIN ||
+      process.env.APP_ORIGIN ||
+      process.env.PUBLIC_APP_ORIGIN ||
+      process.env.VITE_PUBLIC_APP_ORIGIN ||
+      "",
+  ).trim();
+  if (!raw) return [];
+  return raw.split(",").map((item) => normalizeOrigin(item)).filter(Boolean);
+}
+
+function corsOptions() {
+  const allowedOrigins = configuredCorsOrigins();
+  if (!allowedOrigins.length) return {};
+  return {
+    credentials: true,
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(normalizeOrigin(origin))) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error("Origin is not allowed by CORS"));
+    },
+  };
+}
+
 function createApp() {
   ensureDirs();
   const app = express();
   const upload = multer({ dest: UPLOAD_DIR });
 
-  app.use(cors());
+  app.use(cors(corsOptions()));
   app.use(express.json({ limit: "20mb" }));
   app.use("/uploads", express.static(UPLOAD_DIR));
+
+  app.post("/api/auth/register", (req, res) => {
+    const username = String(req.body.username || "").trim();
+    const phone = String(req.body.phone || "").trim();
+    const email = String(req.body.email || "").trim();
+    const password = String(req.body.password || "");
+    const confirmPassword = String(req.body.confirmPassword || req.body.confirm_password || "");
+    if (!username) return fail(res, 400, "用户名必填");
+    if (!phone) return fail(res, 400, "手机号必填");
+    if (!password) return fail(res, 400, "密码必填");
+    if (password !== confirmPassword) return fail(res, 400, "两次输入的密码不一致");
+    if (password.length < 8) return fail(res, 400, "密码至少需要 8 位");
+    const db = readDb();
+    const draft = { username, phone, email };
+    if (userDuplicate(db, draft)) return fail(res, 409, "用户名、手机号或邮箱已存在");
+    const timestamp = nowIso();
+    const user = normalizeUser({
+      id: uid("user"),
+      username,
+      phone,
+      email,
+      passwordHash: bcrypt.hashSync(password, 12),
+      role: "viewer",
+      status: "pending",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    db.users = [user, ...db.users];
+    writeDb(db);
+    ok(res, { user: sanitizeUser(user), message: "注册成功，请等待管理员审核通过后使用。" });
+  });
+
+  app.post("/api/auth/login", (req, res) => {
+    const login = String(req.body.login || req.body.username || req.body.phone || "").trim();
+    const password = String(req.body.password || "");
+    if (!getSessionSecret()) return fail(res, 500, "SESSION_SECRET_MISSING", "生产环境未配置 SESSION_SECRET 或 JWT_SECRET。");
+    if (!login || !password) return fail(res, 400, "账号和密码必填");
+    const db = readDb();
+    const user = findUserByLogin(db, login);
+    if (!user || !safeComparePassword(password, user.passwordHash)) return fail(res, 401, "账号或密码错误");
+    if (user.status === "pending") return fail(res, 403, "账号正在审核中，请联系管理员开通权限。");
+    if (user.status === "disabled") return fail(res, 403, "账号已被停用，请联系管理员。");
+    if (user.status !== "active") return fail(res, 403, "账号状态异常，请联系管理员。");
+    const token = createSessionToken(user);
+    setSessionCookie(req, res, token);
+    ok(res, sanitizeUser(user));
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    clearSessionCookie(req, res);
+    ok(res, { loggedOut: true });
+  });
+
+  app.get("/api/auth/me", (req, res) => {
+    const user = userFromRequest(req);
+    if (!user) return fail(res, 401, "UNAUTHENTICATED", "请先登录。");
+    ok(res, sanitizeUser(user));
+  });
+
+  app.use("/api", authGate);
 
   app.get("/api/health", (req, res) => {
     const host = req.get("host") || "";
     const portPart = host.includes(":") ? `:${host.split(":").pop()}` : "";
     const protocol = req.get("x-forwarded-proto") || req.protocol || "http";
     const requestOrigin = host ? `${protocol}://${host}` : "";
-    const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || process.env.VITE_PUBLIC_APP_ORIGIN || "").trim().replace(/\/$/, "");
+    const publicAppOrigin = configuredPublicAppOrigin();
+    const corsOriginConfigured = configuredCorsOrigins().length > 0;
     const lanIps = getLanIps();
     ok(res, {
       mode: "mock-server",
@@ -536,6 +925,7 @@ function createApp() {
       time: nowIso(),
       requestOrigin,
       publicAppOriginConfigured: Boolean(publicAppOrigin),
+      corsOriginConfigured,
       publicAppOrigin: publicAppOrigin ? "已配置" : "",
       lanIps,
       lanAdminUrls: lanIps.map((ip) => `${protocol}://${ip}${portPart}/admin`),
@@ -543,6 +933,52 @@ function createApp() {
       recommendedWorkerUrlPattern: publicAppOrigin ? `${publicAppOrigin}/worker/tk_************` : (requestOrigin ? `${requestOrigin}/worker/tk_************` : ""),
       storageMode: "local-json-and-uploads",
     });
+  });
+
+  app.get("/api/users", (req, res) => {
+    const status = String(req.query.status || "all");
+    const users = readDb().users
+      .filter((user) => status === "all" || !status || user.status === status)
+      .map(sanitizeUser);
+    ok(res, users);
+  });
+
+  app.patch("/api/users/:id/status", (req, res) => {
+    const nextStatus = String(req.body.status || "").trim();
+    if (!USER_STATUSES.includes(nextStatus)) return fail(res, 400, "账号状态无效");
+    const db = readDb();
+    const target = db.users.find((user) => String(user.id) === String(req.params.id));
+    if (!target) return fail(res, 404, "账号不存在");
+    if (target.role === "super_admin" && req.user.role !== "super_admin") return fail(res, 403, "只有超级管理员可以修改超级管理员账号");
+    const activeSuperAdmins = db.users.filter((user) => user.role === "super_admin" && user.status === "active");
+    if (target.role === "super_admin" && target.status === "active" && nextStatus !== "active" && activeSuperAdmins.length <= 1) {
+      return fail(res, 400, "至少需要保留一个启用的超级管理员");
+    }
+    db.users = db.users.map((user) => String(user.id) === String(req.params.id)
+      ? normalizeUser({ ...user, status: nextStatus, updatedAt: nowIso() })
+      : user);
+    writeDb(db);
+    ok(res, sanitizeUser(db.users.find((user) => String(user.id) === String(req.params.id))));
+  });
+
+  app.patch("/api/users/:id/role", (req, res) => {
+    const nextRole = String(req.body.role || "").trim();
+    if (!USER_ROLES.includes(nextRole)) return fail(res, 400, "账号角色无效");
+    const db = readDb();
+    const target = db.users.find((user) => String(user.id) === String(req.params.id));
+    if (!target) return fail(res, 404, "账号不存在");
+    if ((target.role === "super_admin" || nextRole === "super_admin") && req.user.role !== "super_admin") {
+      return fail(res, 403, "只有超级管理员可以调整超级管理员角色");
+    }
+    const activeSuperAdmins = db.users.filter((user) => user.role === "super_admin" && user.status === "active");
+    if (target.role === "super_admin" && nextRole !== "super_admin" && target.status === "active" && activeSuperAdmins.length <= 1) {
+      return fail(res, 400, "至少需要保留一个启用的超级管理员");
+    }
+    db.users = db.users.map((user) => String(user.id) === String(req.params.id)
+      ? normalizeUser({ ...user, role: nextRole, updatedAt: nowIso() })
+      : user);
+    writeDb(db);
+    ok(res, sanitizeUser(db.users.find((user) => String(user.id) === String(req.params.id))));
   });
 
   app.get("/api/projects", (req, res) => ok(res, readDb().projects));
@@ -589,6 +1025,10 @@ function createApp() {
   app.get("/api/workers/:workerIdOrSlug", (req, res) => {
     const match = findWorkerMatch(readDb(), req.params.workerIdOrSlug);
     if (!match) return fail(res, 404, "链接无效或已过期，请联系管理员重新发送师傅链接。");
+    const authUser = userFromRequest(req);
+    if (!authUser && workerAccessToken(match.worker) !== String(req.params.workerIdOrSlug || "")) {
+      return fail(res, 403, "FORBIDDEN", "师傅访问码无效。");
+    }
     ok(res, { ...match.worker, __legacyLink: match.legacy });
   });
   app.post("/api/workers", (req, res) => {
@@ -664,7 +1104,10 @@ function createApp() {
 
   app.post("/api/workers/:id/heartbeat", (req, res) => {
     const db = readDb();
-    const existing = db.workers.find((worker) => String(worker.id) === String(req.params.id));
+    const access = authenticatedOrWorkerToken(req, db, req.params.id);
+    if (!access) return fail(res, 403, "FORBIDDEN", "师傅访问码无效。");
+    if (access.type === "disabled-worker") return fail(res, 403, "该师傅链接已停用，请联系管理员。");
+    const existing = access.worker || findWorker(db, req.params.id);
     if (!existing) return fail(res, 404, "师傅不存在");
     if (existing.enabled === false) return fail(res, 403, "该师傅链接已停用，请联系管理员。");
     const timestamp = nowIso();
@@ -698,7 +1141,10 @@ function createApp() {
 
   app.post("/api/workers/:id/offline", (req, res) => {
     const db = readDb();
-    const existing = db.workers.find((worker) => String(worker.id) === String(req.params.id));
+    const access = authenticatedOrWorkerToken(req, db, req.params.id);
+    if (!access) return fail(res, 403, "FORBIDDEN", "师傅访问码无效。");
+    if (access.type === "disabled-worker") return fail(res, 403, "该师傅链接已停用，请联系管理员。");
+    const existing = access.worker || findWorker(db, req.params.id);
     if (!existing) return fail(res, 404, "师傅不存在");
     const timestamp = nowIso();
     const next = {
@@ -723,7 +1169,10 @@ function createApp() {
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) return fail(res, 400, "定位坐标无效");
 
     const db = readDb();
-    const existing = db.workers.find((worker) => matchWorker(worker, workerId)) || { id: workerId, name: workerId };
+    const access = authenticatedOrWorkerToken(req, db, workerId);
+    if (!access) return fail(res, 403, "FORBIDDEN", "师傅访问码无效。");
+    if (access.type === "disabled-worker") return fail(res, 403, "该师傅链接已停用，请联系管理员。");
+    const existing = access.worker || db.workers.find((worker) => matchWorker(worker, workerId)) || { id: workerId, name: workerId };
     if (existing.enabled === false) return fail(res, 403, "该师傅链接已停用，请联系管理员。");
     const speed = Number(req.body.speed || 0);
     const moving = booleanValue(req.body.moving, speed > 3);
@@ -848,13 +1297,19 @@ function createApp() {
   app.get("/api/worker-tasks", (req, res) => {
     const workerId = req.query.workerId || req.query.worker || req.query.worker_id;
     if (!workerId) return fail(res, 400, "缺少 workerId");
-    const payload = buildWorkerTasksPayload(readDb(), workerId);
+    const db = readDb();
+    const access = authenticatedOrWorkerToken(req, db, workerId);
+    if (!access) return fail(res, 403, "FORBIDDEN", "师傅访问码无效。");
+    const payload = buildWorkerTasksPayload(db, access.worker?.id || workerId);
     if (!payload) return fail(res, 404, "链接无效或已过期，请联系管理员重新发送师傅链接。");
     ok(res, payload, payload);
   });
 
   app.get("/api/worker-tasks/:workerId", (req, res) => {
-    const payload = buildWorkerTasksPayload(readDb(), req.params.workerId);
+    const db = readDb();
+    const access = authenticatedOrWorkerToken(req, db, req.params.workerId);
+    if (!access) return fail(res, 403, "FORBIDDEN", "师傅访问码无效。");
+    const payload = buildWorkerTasksPayload(db, access.worker?.id || req.params.workerId);
     if (!payload) return fail(res, 404, "链接无效或已过期，请联系管理员重新发送师傅链接。");
     ok(res, payload, payload);
   });
@@ -863,6 +1318,23 @@ function createApp() {
   app.post("/api/point-media/:pointId", upload.array("files"), (req, res) => {
     const db = readDb();
     const files = req.files || [];
+    const access = authenticatedOrWorkerToken(req, db, publicWorkerTokenFromRequest(req));
+    if (!access) {
+      cleanupUploadedFiles(files);
+      return fail(res, 403, "FORBIDDEN", "师傅访问码无效。");
+    }
+    if (access.type === "disabled-worker") {
+      cleanupUploadedFiles(files);
+      return fail(res, 403, "该师傅链接已停用，请联系管理员。");
+    }
+    const uploadWorker = access.worker || findWorker(db, req.body.workerId || req.body.worker_id || "");
+    if (access.type === "worker") {
+      const assigned = db.dispatchTasks.some((task) => String(workerIdOf(task)) === String(uploadWorker.id) && String(pointIdOf(task)) === String(req.params.pointId));
+      if (!assigned) {
+        cleanupUploadedFiles(files);
+        return fail(res, 403, "该点位未派给当前师傅。");
+      }
+    }
     const media = files.map((file) => {
       const ext = path.extname(file.originalname);
       const nextName = `${file.filename}${ext}`;
@@ -871,7 +1343,7 @@ function createApp() {
       return {
         id: uid("media"),
         point_id: req.params.pointId,
-        worker_id: req.body.workerId || req.body.worker_id || "",
+        worker_id: uploadWorker?.id || req.body.workerId || req.body.worker_id || "",
         url: `/uploads/${encodeURIComponent(nextName)}`,
         file_name: file.originalname,
         mime_type: file.mimetype,

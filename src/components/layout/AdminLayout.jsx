@@ -21,6 +21,8 @@ export function AdminLayout({
   globalSearch,
   setGlobalSearch,
   onQuickAction,
+  currentUser,
+  onLogout,
   children,
 }) {
   return (
@@ -32,6 +34,7 @@ export function AdminLayout({
         onNavigate={onNavigate}
         dataSource={data.dataSource}
         dataMode={getDataModeLabel()}
+        currentUser={currentUser}
       />
       <section className="enterprise-main">
         <Header
@@ -47,6 +50,8 @@ export function AdminLayout({
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
           onQuickAction={onQuickAction}
+          currentUser={currentUser}
+          onLogout={onLogout}
         />
         {data.loading && <section className="loading-strip"><span /></section>}
         <div className="page-fade" key={activePage}>{children}</div>

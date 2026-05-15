@@ -4,6 +4,8 @@
 
 当前项目类型：Vite React。
 
+正式生产域名已经固定为 `https://wall.hc12345.com/`。云服务器、Nginx、PM2、HTTPS、上传目录和后端 API 的正式部署步骤以 [DEPLOY_PRODUCTION.md](./DEPLOY_PRODUCTION.md) 为准；本文只保留发布流程和预览环境说明。
+
 ## 本地安装
 
 第一次拿到代码时执行：
@@ -78,7 +80,7 @@ VITE_RELEASE_NOTES=
 
 VITE_DATA_MODE=mock-server
 VITE_API_BASE_URL=
-VITE_PUBLIC_APP_ORIGIN=https://你的域名
+VITE_PUBLIC_APP_ORIGIN=https://wall.hc12345.com
 
 VITE_AMAP_KEY=
 VITE_AMAP_SECURITY_CODE=
@@ -90,7 +92,14 @@ VITE_KIMI_API_KEY=
 VITE_KIMI_CLASSIFY_ENDPOINT=
 
 PORT=8787
-PUBLIC_APP_ORIGIN=https://你的域名
+PUBLIC_APP_ORIGIN=https://wall.hc12345.com
+APP_ORIGIN=https://wall.hc12345.com
+CORS_ORIGIN=https://wall.hc12345.com
+SESSION_SECRET=
+JWT_SECRET=
+ADMIN_USERNAME=
+ADMIN_PHONE=
+ADMIN_PASSWORD=
 ```
 
 变量解释：
@@ -101,7 +110,7 @@ PUBLIC_APP_ORIGIN=https://你的域名
 - `VITE_BUILD_TIME`：构建时间。
 - `VITE_DEPLOY_PLATFORM`：部署平台，例如 `Vercel`、`Netlify`、`Cloud Server`。
 - `VITE_RELEASE_NOTES`：发布说明，例如 `师傅端上传体验优化`。
-- `VITE_PUBLIC_APP_ORIGIN`：后台复制师傅链接时使用的公网地址，正式环境必须配置。
+- `VITE_PUBLIC_APP_ORIGIN`：后台复制师傅链接时使用的公网地址，正式环境固定为 `https://wall.hc12345.com`。
 - `VITE_AMAP_KEY` 和 `VITE_AMAP_SECURITY_CODE`：高德地图 Web JS API 配置。
 
 ## GitHub 分支说明
@@ -294,7 +303,7 @@ git push origin feature/xxx
 
 师傅链接出现 localhost：
 
-- 正式环境必须配置 `VITE_PUBLIC_APP_ORIGIN=https://你的域名`。
+- 正式环境必须配置 `VITE_PUBLIC_APP_ORIGIN=https://wall.hc12345.com`。
 - 不要从本机 `localhost` 后台复制链接发给外地师傅。
 
 上传失败：

@@ -1,0 +1,13 @@
+ INFO  Accepting connections at http://localhost:4177
+ HTTP  2026/5/14 19:28:49 127.0.0.1 GET /admin/map
+ HTTP  2026/5/14 19:28:49 127.0.0.1 Returned 200 in 13 ms
+ HTTP  2026/5/14 19:32:30 127.0.0.1 GET /admin/map
+ HTTP  2026/5/14 19:32:30 127.0.0.1 Returned 200 in 2 ms
+ HTTP  2026/5/14 19:32:30 127.0.0.1 GET /assets/index-D22guVft.js
+ HTTP  2026/5/14 19:32:30 127.0.0.1 Returned 200 in 5 ms
+ HTTP  2026/5/14 19:32:30 127.0.0.1 GET /assets/index-RZ3IpcXQ.css
+ HTTP  2026/5/14 19:32:30 127.0.0.1 Returned 200 in 2 ms
+ HTTP  2026/5/14 19:32:31 127.0.0.1 GET /api/projects?action=list
+ HTTP  2026/5/14 19:32:31 127.0.0.1 Returned 200 in 2 ms
+ HTTP  2026/5/14 19:32:31 127.0.0.1 GET /api/wall-points
+ HTTP  2026/5/14 19:32:31 127.0.0.1 Returned 200 in 1 ms

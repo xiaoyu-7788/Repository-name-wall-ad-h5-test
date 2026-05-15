@@ -74,7 +74,8 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
   test("点位管理支持表格、搜索、筛选、分页、新增编辑删除入口", async ({ page }) => {
     await resetDemoData(page);
     await goPage(page, "点位管理", "点位管理");
-    await expect(page.locator(".enterprise-header .header-title span")).toHaveCount(0);
+    await expect(page.locator(".enterprise-header .header-title span")).toHaveText("后台 / 点位管理");
+    await expect(page.locator(".enterprise-header .header-title span")).not.toContainText("Point Center");
     await expect(page.getByRole("heading", { name: "点位管理" })).toBeVisible();
     await expect(page.getByRole("button", { name: "标签管理", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "批量导入", exact: true })).toBeVisible();
@@ -182,7 +183,7 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     await page.getByLabel("手机号").fill("13800000005");
     await page.getByLabel("车辆编号").fill("粤a·t003");
     await page.getByLabel("队伍类型").selectOption("install");
-    await page.locator(".drawer-panel").getByRole("button", { name: "新增师傅", exact: true }).click();
+    await page.locator(".worker-form-modal").getByRole("button", { name: "新增师傅", exact: true }).click();
 
     await expect(page.locator(".enterprise-table")).toContainText("黄师傅");
     await expect(page.locator(".enterprise-table")).toContainText("粤A·T003");
@@ -379,6 +380,11 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     await openAdmin(page, "/admin/media");
     await expect(page.getByRole("heading", { name: "素材管理" })).toBeVisible();
     await expect(page.locator(".media-card")).toHaveCount(1);
+    await page.locator(".media-card").click();
+    await expect(page.locator(".mediaSelectionBar")).toContainText("已选 1 个素材");
+    await page.locator(".media-card .media-preview").dblclick();
+    await expect(page.getByRole("dialog")).toContainText("下载当前素材");
+    await page.getByRole("dialog").getByLabel("关闭").click();
     await expect(page.getByRole("button", { name: "批量下载 ZIP" })).toBeVisible();
     const zipPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "批量下载 ZIP" }).click();
@@ -476,7 +482,7 @@ test.describe("全国墙体广告执行 H5 企业级后台", () => {
     expect(apiSource).toContain("import.meta.env.PROD");
     expect(apiSource).not.toMatch(/192[.]168[.]/);
     expect(apiSource).not.toMatch(/hostname[}]:8787/);
-    expect(apiSource).toContain('requestApi("/api/dispatch?action=create"');
+    expect(apiSource).toContain('requestApi("/api/dispatch"');
     expect(apiSource).toContain("isSupabaseDataMode");
     expect(supabaseSource).toContain("VITE_SUPABASE_URL");
     expect(supabaseSource).toContain("VITE_SUPABASE_ANON_KEY");

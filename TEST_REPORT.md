@@ -1560,3 +1560,317 @@ npm run test:e2e
 - `tests/results/admin-map-final-check.png`
 - `TEST_REPORT.md`
 - `AGENTS.md`（codex-agent-mem 生成上下文更新）
+
+## 56. `wall.hc12345.com` 正式部署链路配置
+
+更新时间：2026-05-14。
+
+本次目标是把正式域名、Nginx、HTTPS、后端接口、数据库、上传目录和师傅端链接的上线配置串成一套可执行方案。当前无法在本机直接操作公网服务器的 Nginx、Certbot 和 PM2，但仓库已补齐可复制到服务器执行的正式配置。
+
+本次新增或修改：
+
+- 新增 `ecosystem.config.cjs`：PM2 固定以 `/var/www/wall-ad-system` 为工作目录，`PUBLIC_APP_ORIGIN`、`APP_ORIGIN`、`CORS_ORIGIN` 和 `VITE_PUBLIC_APP_ORIGIN` 均固定为 `https://wall.hc12345.com`。
+- 新增 `deploy/nginx/wall.hc12345.com.conf`：正式域名最终 HTTPS Nginx 配置，`/api/` 经同域反代进入 PM2 后端，`/uploads/` 指向 `/var/www/wall-ad-system/server/uploads/`，`/worker/tk_...` 和 `/admin` 通过 SPA fallback 回到 `index.html`。
+- 新增 `deploy/nginx/wall.hc12345.com.bootstrap.conf`：首次签发证书前使用的 HTTP 引导配置。
+- 新增 `deploy/env.production.wall.hc12345.com.example`：正式域名环境变量模板，不包含真实 Key。
+- 新增 `scripts/production-health-check.mjs`：公网验收脚本，检查 HTTPS 域名、后台 SPA、师傅端 SPA、`/api/health` 和 `/api/debug-state`。
+- 更新 `package.json`：新增 `npm run test:supabase` 和 `npm run test:prod`。
+- 更新 `DEPLOY_PRODUCTION.md`：补充 `wall.hc12345.com` 的目录、端口、Nginx、HTTPS、数据库、上传目录、PM2 和验收步骤。
+
+正式链路约定：
+
+- 正式域名：`https://wall.hc12345.com`
+- 项目目录：`/var/www/wall-ad-system`
+- 前端构建产物：`/var/www/wall-ad-system/dist`
+- 后端接口：公网统一经 `https://wall.hc12345.com/api/...` 访问，前端生产请求使用相对路径 `/api/...`。
+- 当前业务数据库：`/var/www/wall-ad-system/server/data/db.json`
+- 上传目录：`/var/www/wall-ad-system/server/uploads/`
+- 师傅端链接格式：`https://wall.hc12345.com/worker/tk_XXXXXXXXXXXX`
+
+验证命令：
+
+```bash
+npm run build
+npm run test:api
+npm run test:e2e
+node -c ecosystem.config.cjs
+node --check scripts/production-health-check.mjs
+```
+
+验证结果：
+
+- `npm run build`：通过；仍有既有 Vite chunk size warning，不影响本次部署配置。
+- `npm run test:api`：通过，确认 health、派单、worker-tasks、上传、定位、debug-state、complete-point 等本地后端链路可用。
+- `npm run test:e2e`：通过，11/11 passed。
+- `node -c ecosystem.config.cjs`：通过。
+- `node --check scripts/production-health-check.mjs`：通过。
+- `npm run test:supabase`：本次未执行；本轮未修改 Supabase 表、Storage 或真实 Supabase 读写逻辑。服务器正式配置 Supabase 时可单独执行该命令，脚本不会打印真实 Key。
+
+仍需在公网服务器人工执行：
+
+- 首次签发证书前先启用 `deploy/nginx/wall.hc12345.com.bootstrap.conf`。
+- 执行 `sudo certbot --nginx -d wall.hc12345.com` 签发 HTTPS 证书。
+- 证书生成后再启用 `deploy/nginx/wall.hc12345.com.conf` 作为最终 HTTPS 配置。
+- 在服务器项目根目录创建真实 `.env.production`，配置高德 Key 和正式域名变量。
+- 执行 `npm run build` 后用 `pm2 start ecosystem.config.cjs` 启动后端。
+- 执行 `npm run test:prod` 做公网链路验收。
+
+## 57. 正式域名生产配置统一收口
+
+更新时间：2026-05-14。
+
+本次目标是把生产环境所有对外 origin 统一为 `https://wall.hc12345.com`，并明确前端生产请求走同域相对路径 `/api/...`。
+
+本次新增或修改：
+
+- `server/index.js`：后端 health 和 CORS 支持 `PUBLIC_APP_ORIGIN`、`APP_ORIGIN`、`CORS_ORIGIN`，生产服务端允许 origin 统一由正式域名配置控制。
+- `.env.example`、`deploy/env.production.wall.hc12345.com.example`、`ecosystem.config.cjs`：统一写入 `https://wall.hc12345.com`，补齐 `APP_ORIGIN` 和 `CORS_ORIGIN`。
+- `deploy/nginx/wall.hc12345.com.conf`：改为最终 HTTPS 配置，证书路径使用 `wall.hc12345.com`，HTTP 自动跳转 HTTPS。
+- `deploy/nginx/wall.hc12345.com.bootstrap.conf`：新增首次签发证书前的 HTTP 引导配置。
+- `README.md`、`DEPLOY.md`、`DEPLOY_PRODUCTION.md`：生产说明统一为 `https://wall.hc12345.com/`，后台、师傅端、API、上传文件均使用正式公网链接。
+- `TEST_REPORT.md`：记录本轮生产配置统一、验证命令和服务器剩余人工步骤。
+
+验证命令：
+
+```bash
+node --check server/index.js
+node -c ecosystem.config.cjs
+node --check scripts/production-health-check.mjs
+npm run build
+npm run test:api
+npm run test:e2e
+```
+
+验证结果：
+
+- `node --check server/index.js`：通过。
+- `node -c ecosystem.config.cjs`：通过。
+- `node --check scripts/production-health-check.mjs`：通过。
+- `npm run build`：通过；仍有既有 Vite chunk size warning。
+- `npm run test:api`：通过。
+- `npm run test:e2e`：通过，11/11 passed。
+- `npm run test:supabase`：本轮未执行；没有修改 Supabase 表结构、Storage 桶规则或真实 Supabase 读写逻辑。
+
+备注：
+
+- `npm run test:api` 和 `npm run test:e2e` 写动过 `server/data/db.json` 的测试时间戳，已还原，最终没有保留测试数据变更。
+- 公网服务器仍需实际执行 DNS、Nginx、Certbot、PM2 和 `npm run test:prod` 验收。
+
+## 58. 正式后台身份验证、注册与账号审核
+
+更新时间：2026-05-14。
+
+本次目标是为正式生产域名 `https://wall.hc12345.com/` 增加真实后台登录、注册、超级管理员初始化、角色权限和账号审核机制，同时确保师傅端 token 链接不被后台登录拦截。
+
+本次新增或修改：
+
+- `server/index.js`：新增用户表规范、bcrypt 密码 hash、`.env.production` 读取、初始 `super_admin` 自动创建、httpOnly cookie 会话、`/api/auth/*`、`/api/users/*`、`requireAuth` 和角色权限控制。
+- `server/test-api.js`：新增认证回归，覆盖未登录 401、注册 pending、pending/disabled 登录限制、super_admin 审核、退出后重新登录、师傅 token API。
+- `src/App.jsx`、`src/pages/LoginPage.jsx`、`src/pages/RegisterPage.jsx`、`src/pages/AccountsPage.jsx`：新增登录页、注册页、账号管理页和后台 AuthGuard。
+- `src/apiClient.js`：新增 auth/users API，所有 fetch 使用同源 cookie，并将生产 API 请求统一改为 REST 路径。
+- `src/components/layout/Header.jsx`：右上角显示当前用户和退出按钮。
+- `src/lib/domain.js`、`src/components/layout/Sidebar.jsx`：新增“账号管理”导航，仅 super_admin/admin 可见。
+- `.env.example`、`deploy/env.production.wall.hc12345.com.example`、`README.md`、`DEPLOY.md`、`DEPLOY_PRODUCTION.md`：补充 `ADMIN_USERNAME`、`ADMIN_PHONE`、`ADMIN_PASSWORD`、`SESSION_SECRET`、`JWT_SECRET` 配置说明。
+- `package.json` / `package-lock.json`：新增 `bcryptjs`，用于 bcrypt hash。
+
+验证命令：
+
+```bash
+node --check server/index.js
+node --check server/test-api.js
+node --check scripts/production-health-check.mjs
+npm run test:api
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `node --check server/index.js`：通过。
+- `node --check server/test-api.js`：通过。
+- `node --check scripts/production-health-check.mjs`：通过。
+- `npm run test:api`：通过，覆盖未登录后台 API 401、注册 pending、pending 不能登录、super_admin 登录/审核、active 登录、dispatcher 不能管理账号、disabled 不能登录、退出后重新登录、后台 API 登录态、师傅 token 上传/定位/任务链路。
+- `npm run build`：通过；仍有既有 Vite chunk size warning。
+- `npm run test:e2e`：通过，11/11 passed。
+- `npm run test:supabase`：本轮未执行；本地 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY` 未配置完整，未打印任何真实密钥。
+
+生产上线提醒：
+
+- `.env.production` 必须配置 `ADMIN_USERNAME`、`ADMIN_PHONE`、`ADMIN_PASSWORD`，否则第一次启动不会自动创建超级管理员。
+- `.env.production` 必须配置 `SESSION_SECRET` 或 `JWT_SECRET`，否则生产环境登录接口会拒绝签发会话。
+- 初始超级管理员创建后，密码只保存 bcrypt hash，不保存明文。
+
+## 59. 统一新版后台界面恢复
+
+更新时间：2026-05-15。
+
+本次目标是恢复后台全页面统一新版风格，重点处理素材管理新版交互、地图调度大地图主视觉、点位详情全屏弹窗，并清理旧版 Drawer 与调试文案残留。
+
+改动页面列表：
+
+- 全局后台框架：`Header` 增加中文面包屑，`Sidebar` 清理多余副标题和左侧底部冗余来源文本，保留中文导航主标题。
+- 点位管理：点位详情继续使用全屏居中大弹窗，去掉英文 `Point Detail` 副标题，并挂入统一 `enterprise-modal` 类。
+- 素材管理：重建为新版卡片网格，支持单击选中、Ctrl/Cmd 多选、Shift 连续多选、空白拖拽框选、全选、取消全选、清空选择、已选数量提示、下载 ZIP、导出明细、双击预览、上一张/下一张和视频 MP4/播放标识。
+- 师傅管理 / 项目管理：表单弹窗不再复用 `drawer-panel`，操作区统一改为 `form-actions`。
+- 全局样式：补齐新版后台 CSS 变量、公共按钮/面板类、素材卡片选择态、预览弹窗样式，并删除旧版 `.drawer-layer` / `.drawer-panel` / `points-final-drawer-*` 样式。
+- E2E：同步更新为新版中文面包屑、非 Drawer 弹窗选择器，并增加素材卡片选中与双击预览断言。
+
+保留的 API 与数据逻辑：
+
+- 未修改后端服务、登录/注册/鉴权、用户审核、上传目录、师傅端 worker token、`/api/health`、PM2/Nginx/HTTPS 部署配置。
+- 素材 ZIP 下载仍使用当前真实 `data.photos`、点位、师傅和项目数据生成清单与归档结构；没有写死示例图片或临时测试数据。
+- 地图调度三栏结构和高德地图/Amap 数据逻辑保持原接口与现有组件。
+
+验证命令：
+
+```bash
+npm run build
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build`：通过；仍有既有 Vite chunk size warning。
+- `npm run test:e2e`：通过，11/11 passed。
+- `npm run test:supabase`：本轮未执行；没有修改 Supabase 表、Storage、派单后端、上传后端或诊断逻辑。
+
+人工/源码验收结果：
+
+- 源码扫描 `src` 未发现可见 `DEBUG-MAP-LAYOUT`、`ONLY-CURRENT-SOURCE`、`Operations`、`Map Console`、`Point Center`、`Media Center`、`drawer-layer`、`drawer-panel` 残留。
+- 地图调度 E2E 覆盖 1920 与 1366 宽度，确认地图主画布可见、无顶部巨大 KPI 块、无横向滚动。
+- 点位详情 E2E 确认打开后 `.drawer-panel = 0`，列表保持可见，关闭后恢复正常。
+- 素材管理 E2E 覆盖上传后进入素材页、卡片选中、预览弹窗、ZIP 下载；Ctrl/Cmd、Shift 和拖拽框选已在源码实现，建议上线后在真实素材量较多时再做一次人工点验。
+- 线上访问和 `pm2 restart wall-ad-h5` 未在本机执行；需要在 Ubuntu 24.04 生产服务器部署后再执行 Nginx、PM2、HTTPS 与 `curl https://wall.hc12345.com/api/health` 验收。
+
+## 60. 本地开发临时测试登录入口
+
+更新时间：2026-05-15。
+
+本次目标是在 `localhost:5173` 无法访问后端 API 时，保留正式登录逻辑，同时增加仅本地开发可见的临时入口，方便测试新版后台页面。
+
+本次新增或修改：
+
+- `src/pages/LoginPage.jsx`：登录页增加“临时进入测试后台”按钮，仅在 `import.meta.env.DEV === true` 或 `VITE_ENABLE_DEV_LOGIN=true` 时显示。
+- `src/pages/LoginPage.jsx`：点击临时入口会写入：
+  - `localStorage.admin_token = "dev-preview-token"`
+  - `localStorage.admin_user = {"name":"测试管理员","phone":"13291116876","role":"admin", ...}`
+- `src/App.jsx`：本地开发环境识别 `dev-preview-token`，直接建立测试管理员登录态；刷新 `/admin/...` 不再被踢回登录页。
+- `src/App.jsx`：退出登录时会清理 `admin_token` 和 `admin_user`，不影响正式 cookie 登录。
+- `src/styles.css`：增加 `.dev-login-button` 样式。
+
+保留逻辑：
+
+- 原账号密码登录接口 `POST /api/auth/login` 未删除、未改动。
+- 生产环境默认不会显示临时按钮；`wall.hc12345.com` 的正式登录/注册/审核逻辑不受影响。
+
+验证命令：
+
+```bash
+npm run build
+npm run dev -- --host 0.0.0.0
+npm run test:e2e
+```
+
+验证结果：
+
+- `npm run build`：通过；仍有既有 Vite chunk size warning。
+- `npm run dev -- --host 0.0.0.0`：已启动，监听 `0.0.0.0:5173`。
+- 本地 Playwright 手动链路：打开 `http://localhost:5173/login?next=%2F`，点击 `.dev-login-button` 后成功进入后台，并确认以下页面可加载：
+  - `/admin/dashboard`
+  - `/admin/map`
+  - `/admin/points`
+  - `/admin/workers`
+  - `/admin/dispatch`
+  - `/admin/projects`
+  - `/admin/media`
+  - `/admin/system`
+- `npm run test:e2e`：通过，11/11 passed。
+
+## 61. 正式版上线验收
+
+更新时间：2026-05-15。
+
+本次按正式上线验收顺序执行，结论是：当前代码与本地生产构建已经包含新版后台页面，但本轮没有在当前 Windows 工作区完成生产服务器发布，公网 `https://wall.hc12345.com` 当前仍在服务旧版构建资源。
+
+源码/本地构建确认：
+- 已确认源码包含 8 个新版后台页面：运营总览、地图调度、点位管理、师傅管理、派单中心、项目管理、素材管理、系统状态。
+- 已确认本地构建产物包含新版特征：`enterprise-page`、`media-selection-grid`、`media-select-card`、`media-selection-box`。
+- 本地构建产物未发现：`localhost:5173`、`127.0.0.1:5173`、`VITE_ENABLE_DEV_LOGIN=true`、`DEBUG-MAP-LAYOUT`、`ONLY-CURRENT-SOURCE`。
+
+执行命令与结果：
+```bash
+npm run build
+npm run deploy:prod
+pm2 list
+pm2 status wall-ad-h5
+curl -I -L https://wall.hc12345.com
+curl https://wall.hc12345.com/api/health
+curl -k https://wall.hc12345.com | head -n 30
+```
+
+验收结果：
+- `npm run build`：通过；仍有 Vite chunk size warning。
+- `npm run deploy:prod`：失败。当前 Windows 环境的 `bash` 指向 WSL launcher，但 WSL 内没有 `/bin/bash`，报错 `execvpe(/bin/bash) failed: No such file or directory`。因此发布脚本没有切换生产服务器的 `current` release。
+- `pm2 list` / `pm2 status wall-ad-h5`：当前 Windows 工作区无 `pm2` 命令，无法从本机确认生产服务器 PM2 状态。
+- `curl -I -L https://wall.hc12345.com`：公网返回 `HTTP/1.1 200 OK`，Nginx/Express 可达。
+- `curl https://wall.hc12345.com/api/health`：返回 `{"ok":true,...}`，健康接口正常。
+- `curl -k https://wall.hc12345.com | head -n 30`：返回线上 HTML，当前 JS 资源为 `/assets/index-GMW996dJ.js`。
+- 本地刚构建的 JS 资源为 `/assets/index-8_gHlngw.js`，与线上资源文件名不一致，说明本轮构建未发布到线上。
+- 线上 bundle 特征检查：未发现 `enterprise-page`、`media-selection-grid`、`media-select-card`，仍发现旧版英文副标题 `Operations`、`Map Console`、`Media Center`。因此新版素材管理尚未替换线上旧版。
+- 后台路由 HTTP 可达性：`/admin`、`/admin/map`、`/admin/points`、`/admin/workers`、`/admin/dispatch`、`/admin/projects`、`/admin/media`、`/admin/system` 均返回 200；但当前返回的是旧版线上 bundle，不能判定为新版页面已上线。
+
+待处理：
+- 需要在 Ubuntu 24.04 生产服务器的项目目录 `/www/wall-ad-system/wall_ad_h5_test` 执行 `npm run deploy:prod`，或直接执行 `bash scripts/deploy-production.sh`。
+- 发布完成后在生产服务器执行 `pm2 list` 和 `pm2 status wall-ad-h5`，确认 `wall-ad-h5` 为 `online`。
+- 发布后再次检查首页 HTML 中的 JS/CSS 资源 hash 是否已切换为新 release 构建产物，并复查线上 bundle 中应出现新版素材管理特征。
+
+## 62. 新版后台页面生产源码合并核验
+
+更新时间：2026-05-15。
+
+本次目标是确保正式版前端源码中真正包含新版后台页面，尤其是新版卡片式素材管理，并加入生产上线后可 grep 的精确关键词。
+
+本次修改：
+- `src/pages/MediaPage.jsx`：加入 `data-release-keywords`，包含 `素材预览 / Preview`、`下载已选 ZIP`、`Ctrl + 单击多选`、`框选多个素材` 等上线核验关键词。
+- `src/pages/MediaPage.jsx`：素材选择提示改为明确文案：单击选中、Ctrl + 单击多选、Shift + 单击连续多选、空白处框选多个素材、双击预览。
+- `src/pages/MediaPage.jsx`：预览弹窗空标题兜底改为 `素材预览 / Preview`。
+
+保留逻辑：
+- 未修改后端、Mock Server、`local-json-and-uploads`、`/api/health`、`/admin`、`/worker/tk_*`、`/api/*`、Nginx 配置。
+- 素材管理仍使用真实 `data.photos`、点位、师傅、项目数据，不写死示例素材。
+- 8 个后台页面仍为新版：运营总览、地图调度、点位管理、师傅管理、派单中心、项目管理、素材管理、系统状态。
+
+执行命令：
+```bash
+npm install
+npm run build
+npm run test:e2e
+rg -n "素材预览 / Preview|下载已选 ZIP|Ctrl \+ 单击多选|框选多个素材" src dist/assets dist/index.html
+curl -sk https://wall.hc12345.com | grep -oE '/assets/[^"]+\.js|/assets/[^"]+\.css'
+curl -sk https://wall.hc12345.com/api/health
+pm2 restart wall-ad-h5 --update-env
+pm2 save
+pm2 status wall-ad-h5
+```
+
+验证结果：
+- `npm install`：通过；npm audit 仍提示 1 个 high severity vulnerability。
+- `npm run build`：通过；生成新版本地 bundle `dist/assets/index-ZabQQw9M.js`，仍有 Vite chunk size warning。
+- `npm run test:e2e`：通过，11/11 passed。
+- 本地 `src` 与 `dist/assets/index-ZabQQw9M.js` 均可 grep 到 `素材预览 / Preview`、`下载已选 ZIP`、`Ctrl + 单击多选`、`框选多个素材`。
+- 当前线上 `https://wall.hc12345.com` 仍引用旧资源：`/assets/index-GMW996dJ.js` 和 `/assets/index-D_meer4N.css`。
+- 当前线上 `/api/health` 正常返回 `ok:true`。
+- `pm2 restart wall-ad-h5 --update-env` / `pm2 save` / `pm2 status wall-ad-h5` 未能在当前 Windows 工作区执行：本机无 `pm2` 命令。需要在 Ubuntu 生产服务器执行。
+
+生产机继续执行：
+```bash
+cd /www/wall-ad-system/wall_ad_h5_test
+npm install
+npm run build
+grep -R "素材预览 / Preview\|下载已选 ZIP\|Ctrl + 单击多选\|框选多个素材" -n src dist/assets dist/index.html | head -80
+pm2 restart wall-ad-h5 --update-env
+pm2 save
+curl -sk https://wall.hc12345.com | grep -oE '/assets/[^"]+\.js|/assets/[^"]+\.css'
+curl -sk https://wall.hc12345.com/api/health
+pm2 status wall-ad-h5
+```

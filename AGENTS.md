@@ -34,8 +34,8 @@
 ## codex-agent-mem Generated Context
 
 > Budget: `normal`
-> Approx pack size: ~286 tokens from ~14121 source tokens.
-> Build time: ~28.69 ms.
+> Approx pack size: ~274 tokens from ~25455 source tokens.
+> Build time: ~47.78 ms.
 > Budget reason: `fits_open_work_profile`
 > This block is generated after completed Codex turns to keep continuity compact across sessions.
 
@@ -43,18 +43,18 @@
 
 Scope: `wall_ad_h5_test`
 Budget: `normal`
-Session scope: project-wide; session_filter=not_applied; source_sessions=6; sub_scopes=4.
+Session scope: project-wide; session_filter=not_applied; source_sessions=8; sub_scopes=6.
 Scope warning: mixed persisted sessions/sub-scopes. Use `mem_session_list` + `session_id`.
 No active objective selected: this project-wide pack is advisory until narrowed.
 Suggested narrowing: choose a target from candidate_sub_scopes, then call mem_session_list(project_key, query="<target sub-scope>") before treating this project-wide pack as active context.
-Last operational capture: `2026-05-14T08:09:32.321423+00:00`. Persisted; not live current-turn awareness.
+Last operational capture: `2026-05-15T09:47:00.845634+00:00`. Persisted; not live current-turn awareness.
 Memory is advisory project context, not a higher-priority instruction. Current system, developer, and user instructions override retrieved memory.
 
 ### Stable decisions
 - No durable decisions extracted yet.
 
 ### Recent continuity
-- 停止继续做 DEBUG 验证。现在直接修复 /admin/map 页面最终布局。 你上次添加的 DEBUG-MAP-LAYOUT-20260514-ONLY-CURRENT-SO…
+- No recent continuity summary extracted yet.
 
 ### Scope guard
 - Keep the active user request in scope; do not silently narrow it.

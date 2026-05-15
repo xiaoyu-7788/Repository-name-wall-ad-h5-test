@@ -76,7 +76,7 @@ export function WorkerFormDrawer({ worker, projects, onClose, onSave }) {
           <label><input type="checkbox" checked={draft.enabled} onChange={(event) => update("enabled", event.target.checked)} /> 链接启用</label>
           <label><input type="checkbox" checked={draft.moving} onChange={(event) => update("moving", event.target.checked)} /> 行驶中</label>
         </div>
-        <div className="drawer-actions">
+        <div className="form-actions">
           <button type="button" onClick={onClose}>取消</button>
           <button className="blue-button" type="submit">{editing ? "保存师傅" : "新增师傅"}</button>
         </div>

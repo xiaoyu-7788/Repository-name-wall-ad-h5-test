@@ -2,7 +2,9 @@ import React from "react";
 
 import { PAGE_ITEMS } from "../../lib/domain";
 
-export function Sidebar({ activePage, collapsed, onToggle, onNavigate, dataSource, dataMode }) {
+export function Sidebar({ activePage, collapsed, onToggle, onNavigate, dataSource, dataMode, currentUser }) {
+  const canManageAccounts = ["super_admin", "admin"].includes(currentUser?.role);
+  const visibleItems = PAGE_ITEMS.filter((item) => item.key !== "accounts" || canManageAccounts);
   return (
     <aside className={`enterprise-sidebar ${collapsed ? "collapsed" : ""}`}>
       <div className="sidebar-brand">
@@ -10,7 +12,6 @@ export function Sidebar({ activePage, collapsed, onToggle, onNavigate, dataSourc
         {!collapsed && (
           <div>
             <b>全国墙体广告</b>
-            <small>执行坐标系统</small>
           </div>
         )}
       </div>
@@ -18,7 +19,7 @@ export function Sidebar({ activePage, collapsed, onToggle, onNavigate, dataSourc
         {collapsed ? "›" : "‹"}
       </button>
       <nav className="sidebar-nav" aria-label="后台一级导航">
-        {PAGE_ITEMS.map((item) => (
+        {visibleItems.map((item) => (
           <button
             key={item.key}
             type="button"
@@ -33,7 +34,6 @@ export function Sidebar({ activePage, collapsed, onToggle, onNavigate, dataSourc
       </nav>
       <div className="sidebar-foot">
         <span>{dataMode}</span>
-        {!collapsed && <b>{dataSource}</b>}
       </div>
     </aside>
   );

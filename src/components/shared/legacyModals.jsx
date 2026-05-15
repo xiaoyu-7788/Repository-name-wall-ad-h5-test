@@ -436,6 +436,7 @@ export function MobileMapPack({ data }) {
 }
 
 export function WorkerPage({ data, workerId }) {
+  const workerReleaseKeywords = "一页只显示一个点位 | 上一点 / 下一点 | 上传素材后当前点位自动完成 | 不再要求师傅手动确认状态";
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
@@ -447,7 +448,7 @@ export function WorkerPage({ data, workerId }) {
   const [legacyLink, setLegacyLink] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
   const [taskDebug, setTaskDebug] = useState({
-    requestUrl: getApiRequestUrl(`/api/workers?action=tasks&workerId=${encodeURIComponent(workerId)}`),
+    requestUrl: getApiRequestUrl(`/api/worker-tasks/${encodeURIComponent(workerId)}`),
     lastFetchTime: "",
     count: 0,
     taskPointsLength: 0,
@@ -468,7 +469,7 @@ export function WorkerPage({ data, workerId }) {
   const swipeDirectionGuard = 1.35;
 
   async function fetchWorkerTasks() {
-    const requestPath = `/api/workers?action=tasks&workerId=${encodeURIComponent(workerId)}`;
+    const requestPath = `/api/worker-tasks/${encodeURIComponent(workerId)}`;
     const requestUrl = getApiRequestUrl(requestPath);
     setRemoteLoading(true);
     setTaskDebug((current) => ({ ...current, requestUrl }));
@@ -497,7 +498,8 @@ export function WorkerPage({ data, workerId }) {
         setTaskDebug({ requestUrl, lastFetchTime: new Date().toLocaleTimeString("zh-CN", { hour12: false }), count: 0, taskPointsLength: 0, error: message });
         return;
       }
-      const payload = await getWorkerTasks(workerInfo.id);
+      const workerAccessToken = workerInfo.accessToken || workerInfo.access_token || workerId;
+      const payload = await getWorkerTasks(workerAccessToken);
       const list = Array.isArray(payload.taskPoints) ? payload.taskPoints : [];
       const nextCount = Number.isFinite(Number(payload.count)) ? Number(payload.count) : list.length;
       const nextTime = new Date().toLocaleTimeString("zh-CN", { hour12: false });
@@ -574,8 +576,10 @@ export function WorkerPage({ data, workerId }) {
       const stoppedSeconds = moving ? 0 : Math.round((now - stoppedSinceRef.current) / 1000);
       try {
         await saveWorkerLocation({
-          workerId: worker.id || workerId,
-          worker_id: worker.id || workerId,
+          workerId: activeWorkerToken,
+          worker_id: activeWorkerToken,
+          workerToken: activeWorkerToken,
+          worker_token: activeWorkerToken,
           lng: position.coords.longitude,
           lat: position.coords.latitude,
           accuracy: position.coords.accuracy,
@@ -620,6 +624,7 @@ export function WorkerPage({ data, workerId }) {
   const workerMissing = !worker && !remoteLoading && Boolean(taskDebug.lastFetchTime || remoteError);
   const workerIdDebugText = workerId.startsWith("tk_") ? "安全访问码已识别" : workerId;
   const requestUrlDebugText = maskAccessTokenText(taskDebug.requestUrl);
+  const activeWorkerToken = worker?.accessToken || worker?.access_token || workerId;
 
   React.useEffect(() => {
     if (!worker?.id || workerDisabled) return undefined;
@@ -627,7 +632,7 @@ export function WorkerPage({ data, workerId }) {
 
     async function heartbeat(payload = {}) {
       try {
-        const updatedWorker = await sendWorkerHeartbeat(worker.id, payload);
+        const updatedWorker = await sendWorkerHeartbeat(activeWorkerToken, payload);
         if (!cancelled && updatedWorker?.id) {
           setRemoteWorker((current) => current?.id === updatedWorker.id
             ? { ...current, ...updatedWorker, __legacyLink: Boolean(current.__legacyLink) }
@@ -640,7 +645,7 @@ export function WorkerPage({ data, workerId }) {
     }
 
     function markOffline() {
-      markWorkerOffline(worker.id).catch(() => {});
+      markWorkerOffline(activeWorkerToken).catch(() => {});
     }
 
     function handleVisibilityChange() {
@@ -660,7 +665,7 @@ export function WorkerPage({ data, workerId }) {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       markOffline();
     };
-  }, [worker?.id, workerDisabled]);
+  }, [worker?.id, workerDisabled, activeWorkerToken]);
 
   async function handleUpload(event, kindOverride = uploadKind) {
     const files = Array.from(event.target.files || []);
@@ -734,7 +739,7 @@ export function WorkerPage({ data, workerId }) {
   }
 
   return (
-    <main className="worker-page">
+    <main className="worker-page" data-release-keywords={workerReleaseKeywords}>
       <section className="worker-hero">
         <span>师傅移动端派单页</span>
         <h1>{worker ? `${worker.name}的任务` : (workerMissing ? "链接无效" : "正在识别师傅身份")}</h1>

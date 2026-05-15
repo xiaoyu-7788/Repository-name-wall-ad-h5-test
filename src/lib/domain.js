@@ -12,6 +12,7 @@ export const PAGE_ITEMS = [
   { key: "projects", path: "/admin/projects", label: "项目管理", icon: "◫" },
   { key: "media", path: "/admin/media", label: "素材管理", icon: "▣" },
   { key: "system", path: "/admin/system", label: "系统状态", icon: "◌" },
+  { key: "accounts", path: "/admin/accounts", label: "账号管理", icon: "◎" },
 ];
 
 export const DEFAULT_PROJECT_COLORS = {
@@ -65,7 +66,10 @@ export function getRoute() {
   const parts = url.pathname.split("/").filter(Boolean);
   if (parts[0] === "worker") return { page: "worker", workerId: getWorkerIdFromUrl() };
   if (parts[0] === "mobile-map") return { page: "mobile-map" };
+  if (parts[0] === "login") return { page: "login" };
+  if (parts[0] === "register") return { page: "register" };
   if (parts[0] === "admin") return { page: "admin", adminPage: parts[1] || "dashboard" };
+  if (PAGE_ITEMS.some((item) => item.key === parts[0])) return { page: "admin", adminPage: parts[0] };
   return { page: "admin", adminPage: "dashboard" };
 }
 

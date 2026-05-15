@@ -181,7 +181,7 @@ export function ProjectsPage({ data, projects, activeProject, setActiveProject, 
               ))}
             </div>
           </div>
-          <div className="drawer-actions">
+          <div className="form-actions">
             <button type="button" onClick={() => setDraft(emptyDraft)}>清空</button>
             <button className="blue-button" type="submit">保存项目</button>
           </div>

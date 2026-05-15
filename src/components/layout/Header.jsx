@@ -15,6 +15,8 @@ export function Header({
   globalSearch = "",
   setGlobalSearch,
   onQuickAction,
+  currentUser,
+  onLogout,
 }) {
   const page = PAGE_ITEMS.find((item) => item.key === activePage) || PAGE_ITEMS[0];
   const projectList = normalizeProjects(projects, data.points);
@@ -24,6 +26,7 @@ export function Header({
   return (
     <header className="enterprise-header">
       <div className="header-title">
+        <span>后台 / {page.label}</span>
         <h1>{page.label}</h1>
       </div>
       {isPointsPage ? (
@@ -32,6 +35,14 @@ export function Header({
             <button type="button" onClick={() => window.alert("标签管理入口已保留，后续可接入现有标签逻辑。")}>标签管理</button>
             <button type="button" onClick={() => onQuickAction?.("batch-import")}>批量导入</button>
             <button className="blue-button" type="button" onClick={() => onQuickAction?.("new-point")}>新增点位</button>
+          </div>
+          <div className="user-menu">
+            <button className="avatar-button" type="button" aria-label="当前用户">{currentUser?.username?.slice(0, 1) || "管"}</button>
+            <div>
+              <b>{currentUser?.username || "管理员"}</b>
+              <span>{currentUser?.role || "admin"}</span>
+            </div>
+            <button className="logout-button" type="button" onClick={onLogout}>退出</button>
           </div>
         </div>
       ) : (
@@ -71,7 +82,14 @@ export function Header({
             <span>在线师傅 <b>{stats.onlineWorkers}</b></span>
             <span>施工中 <b>{stats.doing}</b></span>
           </div>
-          <button className="avatar-button" type="button" aria-label="用户设置">管</button>
+          <div className="user-menu">
+            <button className="avatar-button" type="button" aria-label="当前用户">{currentUser?.username?.slice(0, 1) || "管"}</button>
+            <div>
+              <b>{currentUser?.username || "管理员"}</b>
+              <span>{currentUser?.role || "admin"}</span>
+            </div>
+            <button className="logout-button" type="button" onClick={onLogout}>退出</button>
+          </div>
         </div>
       )}
     </header>

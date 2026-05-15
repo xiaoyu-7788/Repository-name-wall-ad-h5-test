@@ -67,19 +67,29 @@ npm run start
 ```env
 VITE_DATA_MODE=mock-server
 VITE_API_BASE_URL=
-VITE_PUBLIC_APP_ORIGIN=https://你的域名
+VITE_PUBLIC_APP_ORIGIN=https://wall.hc12345.com
 VITE_AMAP_KEY=
 VITE_AMAP_SECURITY_CODE=
-PUBLIC_APP_ORIGIN=https://你的域名
+PUBLIC_APP_ORIGIN=https://wall.hc12345.com
+APP_ORIGIN=https://wall.hc12345.com
+CORS_ORIGIN=https://wall.hc12345.com
+SESSION_SECRET=
+JWT_SECRET=
+ADMIN_USERNAME=
+ADMIN_PHONE=
+ADMIN_PASSWORD=
 PORT=8787
 ```
 
 变量说明：
 
 - `VITE_DATA_MODE`：推荐使用 `mock-server`，即前端通过 Express API 读写本地数据文件。
-- `VITE_API_BASE_URL`：本地分离开发可填 `http://localhost:8787`；公网同源部署请留空。
-- `VITE_PUBLIC_APP_ORIGIN`：后台复制师傅链接时优先使用的公网 origin，生产环境建议固定为 `https://你的域名`。
+- `VITE_API_BASE_URL`：公网同源部署必须留空，前端会使用相对路径请求 `/api/...`。
+- `VITE_PUBLIC_APP_ORIGIN`：后台复制师傅链接时优先使用的公网 origin，生产环境固定为 `https://wall.hc12345.com`。
 - `PUBLIC_APP_ORIGIN`：服务端 health 返回和部署自检使用的公网 origin，建议与 `VITE_PUBLIC_APP_ORIGIN` 一致。
+- `APP_ORIGIN` / `CORS_ORIGIN`：生产服务端允许的正式访问 origin，固定为 `https://wall.hc12345.com`。
+- `SESSION_SECRET` / `JWT_SECRET`：后端 httpOnly 登录会话签名密钥，生产环境至少配置其中一个，建议使用 32 位以上随机字符串。
+- `ADMIN_USERNAME` / `ADMIN_PHONE` / `ADMIN_PASSWORD`：首次启动时自动初始化超级管理员；密码只放服务器 `.env.production`，系统会用 bcrypt 保存 hash。
 - `VITE_AMAP_KEY`：高德 Web 端 JS API Key。
 - `VITE_AMAP_SECURITY_CODE`：高德 JS API 安全密钥。
 - `PORT`：Express 服务端口，默认 `8787`。
@@ -88,12 +98,12 @@ PORT=8787
 
 后台复制师傅链接时按以下优先级生成：
 
-- 已配置 `VITE_PUBLIC_APP_ORIGIN`：始终生成 `https://你的域名/worker/tk_XXXXXXXXXXXX`。
+- 已配置 `VITE_PUBLIC_APP_ORIGIN`：始终生成 `https://wall.hc12345.com/worker/tk_XXXXXXXXXXXX`。
 - 未配置但后台通过公网域名打开：使用当前浏览器公网 origin。
 - 本地 `localhost` 打开：尝试读取 `/api/health` 返回的局域网地址，避免直接复制 localhost。
 - API 不可用且没有公网配置：显示局域网模板提示，管理员必须替换为真实可访问地址后才能发给手机测试。
 
-生产环境请固定配置 `VITE_PUBLIC_APP_ORIGIN` 和 `PUBLIC_APP_ORIGIN`，并使用 HTTPS 域名打开 `/admin` 后再复制给师傅。
+生产环境请固定配置 `VITE_PUBLIC_APP_ORIGIN`、`PUBLIC_APP_ORIGIN`、`APP_ORIGIN` 和 `CORS_ORIGIN`，并使用 `https://wall.hc12345.com/admin` 打开后台后再复制给师傅。
 
 ## 师傅 token 安全逻辑
 
@@ -185,6 +195,17 @@ npm run test:api
 - `/api/...` 后端接口
 - `/uploads/...` 上传文件访问
 
+正式生产域名统一为 `https://wall.hc12345.com/`：
+
+- 后台：`https://wall.hc12345.com/admin`
+- 登录：`https://wall.hc12345.com/login`
+- 注册：`https://wall.hc12345.com/register`
+- 师傅端：`https://wall.hc12345.com/worker/tk_XXXXXXXXXXXX`
+- API：`https://wall.hc12345.com/api/...`
+- 上传文件：`https://wall.hc12345.com/uploads/...`
+
+后台访问必须先登录。注册账号默认 `pending`，需要 `super_admin` 或 `admin` 在“账号管理”页面审核通过后才能使用。师傅端 `/worker/tk_...` 不受后台登录拦截，但师傅相关接口会校验专属 token。
+
 详细部署步骤见 [DEPLOY_PRODUCTION.md](./DEPLOY_PRODUCTION.md)。
 
 ## 已知限制
@@ -192,7 +213,7 @@ npm run test:api
 当前版本适合首版小团队试运行，但仍有后续增强项：
 
 - 轨迹回放目前是基础入口和轨迹数据展示，还不是完整时间轴播放器。
-- 当前没有细粒度权限/RBAC 和正式登录体系，公网前建议增加访问保护。
+- 当前账号体系已支持 super_admin / admin / dispatcher / viewer 四类角色；更细粒度的数据范围隔离可在后续按项目、区域或团队继续扩展。
 - 默认持久化使用 `server/data/db.json` 和 `server/uploads/`，大规模生产建议迁移到数据库和对象存储。
 - 视频未做后端自动转码、压缩和截图。
 - 统计报表以运营驾驶舱为主，后续可扩展更多财务、区域和人员绩效报表。

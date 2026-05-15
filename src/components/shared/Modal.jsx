@@ -2,8 +2,8 @@ import React from "react";
 
 export function Modal({ title, subtitle, children, onClose, wide = false }) {
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true">
-      <section className={`modal-card drawer-panel ${wide ? "wide" : ""}`}>
+    <div className="modal-backdrop enterprise-modal-overlay" role="dialog" aria-modal="true">
+      <section className={`modal-card enterprise-modal ${wide ? "wide" : ""}`}>
         <header className="modal-head">
           <div>
             <h2>{title}</h2>
