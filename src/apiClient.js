@@ -3,6 +3,30 @@ import { isSupabaseConfigured, supabase, supabaseEnv } from "./supabaseClient";
 const LOCAL_STORE_KEY = "wall-ad-h5-demo-state";
 const LOCAL_STORE_EVENT = "wall-ad-h5-demo-updated";
 const LOCAL_SCHEMA_VERSION = 4;
+const AUTH_TOKEN_KEY = "wall-ad-h5-auth-token";
+export const AUTH_REQUIRED_EVENT = "wall-ad-auth-required";
+
+export function getAuthToken() {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
+}
+
+export function setAuthToken(token = "") {
+  if (typeof window === "undefined") return;
+  const value = String(token || "").trim();
+  if (value) window.localStorage.setItem(AUTH_TOKEN_KEY, value);
+  else window.localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+export function clearAuthToken() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+function notifyAuthRequired() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(AUTH_REQUIRED_EVENT));
+}
 
 function getBrowserHostname() {
   if (typeof window === "undefined") return "localhost";
@@ -619,15 +643,24 @@ async function parseResponse(response) {
 }
 
 async function requestApi(path, options = {}) {
+  const token = getAuthToken();
+  const headers = options.body instanceof FormData
+    ? { ...(options.headers || {}) }
+    : { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (token && !headers.Authorization && !headers.authorization) {
+    headers.Authorization = `Bearer ${token}`;
+  }
   const response = await fetch(getApiRequestUrl(path), {
     credentials: "same-origin",
     ...options,
-    headers: options.body instanceof FormData
-      ? { ...(options.headers || {}) }
-      : { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers,
   });
   const body = await parseResponse(response);
   if (!response.ok || body.ok === false) {
+    if (response.status === 401 && path !== "/api/auth/login") {
+      clearAuthToken();
+      notifyAuthRequired();
+    }
     const error = new Error(body.error || body.message || body.detail || `接口请求失败：HTTP ${response.status}`);
     error.category = "接口连接失败";
     error.detail = body.detail || body.error || error.message;
@@ -692,7 +725,9 @@ export async function getCurrentUser() {
 }
 
 export async function loginUser({ login, password }) {
-  return requestApi("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) });
+  const auth = await requestApi("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) });
+  if (auth?.token) setAuthToken(auth.token);
+  return auth?.user || auth;
 }
 
 export async function registerUser(payload) {
@@ -700,7 +735,11 @@ export async function registerUser(payload) {
 }
 
 export async function logoutUser() {
-  return requestApi("/api/auth/logout", { method: "POST", body: JSON.stringify({}) });
+  try {
+    return await requestApi("/api/auth/logout", { method: "POST", body: JSON.stringify({}) });
+  } finally {
+    clearAuthToken();
+  }
 }
 
 export async function getUsers(status = "all") {
@@ -713,6 +752,18 @@ export async function updateUserStatus(userId, status) {
 
 export async function updateUserRole(userId, role) {
   return requestApi(`/api/users/${encodeURIComponent(userId)}/role`, { method: "PATCH", body: JSON.stringify({ role }) });
+}
+
+export async function createUser(payload) {
+  return requestApi("/api/users", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export async function updateUser(userId, payload) {
+  return requestApi(`/api/users/${encodeURIComponent(userId)}`, { method: "PUT", body: JSON.stringify(payload) });
+}
+
+export async function deleteUser(userId) {
+  return requestApi(`/api/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
 }
 
 export async function getProjects() {

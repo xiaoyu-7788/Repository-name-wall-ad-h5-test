@@ -544,6 +544,20 @@ a {
   gap: 16px;
 }
 
+.account-create-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+
+.account-create-form input,
+.account-create-form select {
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
 .account-table small {
   display: block;
   margin-top: 4px;

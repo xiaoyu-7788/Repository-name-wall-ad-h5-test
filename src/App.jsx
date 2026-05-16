@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { getCurrentUser, isLocalDataMode, logoutUser } from "./apiClient";
+import { AUTH_REQUIRED_EVENT, clearAuthToken, getCurrentUser, isLocalDataMode, logoutUser } from "./apiClient";
 import { supabaseEnv } from "./supabaseClient";
 import { useH5Data } from "./hooks/useH5Data";
 import { AdminLayout } from "./components/layout/AdminLayout";
@@ -21,7 +21,6 @@ import { MapConsolePage } from "./pages/MapConsolePage";
 import { MediaPage } from "./pages/MediaPage";
 import { PointsPage } from "./pages/PointsPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
-import { RegisterPage } from "./pages/RegisterPage";
 import { SystemHealthPage } from "./pages/SystemHealthPage";
 import { WorkersPage } from "./pages/WorkersPage";
 import {
@@ -327,59 +326,26 @@ function AdminWorkspace({ data, initialPage = "dashboard", currentUser, onLogout
   );
 }
 
-const DEV_PREVIEW_TOKEN = "dev-preview-token";
-const DEV_PREVIEW_USER = {
-  id: "dev-preview-admin",
-  username: "测试管理员",
-  name: "测试管理员",
-  phone: "13291116876",
-  role: "admin",
-  status: "active",
-};
-const enableDevPreviewLogin = import.meta.env.DEV || String(import.meta.env.VITE_ENABLE_DEV_LOGIN || "").toLowerCase() === "true";
-
-function readDevPreviewUser() {
-  if (!enableDevPreviewLogin || typeof window === "undefined") return null;
-  if (window.localStorage.getItem("admin_token") !== DEV_PREVIEW_TOKEN) return null;
-  try {
-    const stored = JSON.parse(window.localStorage.getItem("admin_user") || "{}");
-    return {
-      ...DEV_PREVIEW_USER,
-      ...stored,
-      username: stored.username || stored.name || DEV_PREVIEW_USER.username,
-      status: stored.status || "active",
-    };
-  } catch {
-    return DEV_PREVIEW_USER;
-  }
-}
-
-function clearDevPreviewUser() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem("admin_token");
-  window.localStorage.removeItem("admin_user");
-}
-
 function App() {
   const route = getRoute();
   const data = useH5Data();
-  const authBypass = supabaseEnv.forceLocalDemo;
-  const devPreviewUser = readDevPreviewUser();
-  const [currentUser, setCurrentUser] = useState(authBypass ? { id: "local", username: "本地演示", role: "super_admin", status: "active" } : devPreviewUser);
-  const [authLoading, setAuthLoading] = useState(!authBypass && !devPreviewUser);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(!["worker", "mobile-map", "login", "register"].includes(route.page));
+
+  useEffect(() => {
+    function handleAuthRequired() {
+      setCurrentUser(null);
+      const path = `${window.location.pathname}${window.location.search}`;
+      if (!path.startsWith("/login") && !path.startsWith("/worker") && !path.startsWith("/mobile-map")) {
+        window.history.replaceState({}, "", `/login?next=${encodeURIComponent(path)}`);
+      }
+    }
+    window.addEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired);
+    return () => window.removeEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired);
+  }, []);
 
   useEffect(() => {
     if (route.page === "worker" || route.page === "mobile-map" || route.page === "login" || route.page === "register") {
-      setAuthLoading(false);
-      return undefined;
-    }
-    if (authBypass) {
-      setCurrentUser({ id: "local", username: "本地演示", role: "super_admin", status: "active" });
-      setAuthLoading(false);
-      return undefined;
-    }
-    if (devPreviewUser) {
-      setCurrentUser(devPreviewUser);
       setAuthLoading(false);
       return undefined;
     }
@@ -401,7 +367,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [route.page, authBypass, devPreviewUser?.id]);
+  }, [route.page]);
 
   useEffect(() => {
     if (route.page === "worker") {
@@ -410,13 +376,12 @@ function App() {
     }
     if (route.page === "login" || route.page === "register") return undefined;
     if (route.page === "mobile-map") {
-      if (authBypass) data.loadAll();
       return undefined;
     }
-    if (!authBypass && !currentUser) return undefined;
+    if (!currentUser) return undefined;
     data.loadAll();
     return undefined;
-  }, [route.page, route.workerId, authBypass, currentUser?.id]);
+  }, [route.page, route.workerId, currentUser?.id]);
 
   function handleLogin(user) {
     setCurrentUser(user);
@@ -427,17 +392,17 @@ function App() {
 
   async function handleLogout() {
     await logoutUser().catch(() => null);
-    clearDevPreviewUser();
+    clearAuthToken();
     setCurrentUser(null);
     window.history.replaceState({}, "", "/login");
   }
 
   if (route.page === "worker") return <WorkerPage data={data} workerId={route.workerId} />;
   if (route.page === "mobile-map") return <MobileMapPack data={data} />;
-  if (route.page === "register") return <RegisterPage />;
+  if (route.page === "register") return <LoginPage onLogin={handleLogin} message="普通账号不开放公开注册，请联系超级管理员创建账号。" />;
   if (route.page === "login") return <LoginPage onLogin={handleLogin} />;
   if (authLoading) return <main className="auth-shell"><section className="auth-card">正在验证登录状态...</section></main>;
-  if (!authBypass && !currentUser) return <LoginPage onLogin={handleLogin} />;
+  if (!currentUser) return <LoginPage onLogin={handleLogin} />;
   return <AdminWorkspace data={data} initialPage={route.adminPage || "dashboard"} currentUser={currentUser} onLogout={handleLogout} />;
 }
 

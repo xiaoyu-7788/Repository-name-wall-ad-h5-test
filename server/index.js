@@ -15,7 +15,7 @@ const DIST_DIR = path.join(ROOT, "..", "dist");
 const DIST_INDEX = path.join(DIST_DIR, "index.html");
 const SESSION_COOKIE_NAME = "wall_ad_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
-const USER_ROLES = ["super_admin", "admin", "dispatcher", "viewer"];
+const USER_ROLES = ["super_admin", "admin", "dispatcher", "worker", "client"];
 const USER_STATUSES = ["pending", "active", "disabled"];
 
 loadEnvFile(path.join(ROOT, "..", ".env.production"));
@@ -341,43 +341,52 @@ function normalizeWorker(worker, index, db = {}) {
 
 function normalizeUser(user = {}) {
   const now = nowIso();
-  const role = USER_ROLES.includes(user.role) ? user.role : "viewer";
-  const status = USER_STATUSES.includes(user.status) ? user.status : "pending";
+  const rawRole = user.role === "viewer" ? "client" : user.role;
+  const role = USER_ROLES.includes(rawRole) ? rawRole : "client";
+  const status = USER_STATUSES.includes(user.status) ? user.status : "disabled";
+  const passwordHash = user.passwordHash || user.password_hash || "";
   return {
     id: user.id || uid("user"),
+    name: String(user.name || user.username || user.phone || "").trim(),
     username: String(user.username || "").trim(),
     phone: String(user.phone || "").trim(),
     email: String(user.email || "").trim(),
-    passwordHash: user.passwordHash || user.password_hash || "",
+    passwordHash,
+    password_hash: passwordHash,
     role,
     status,
     createdAt: user.createdAt || user.created_at || now,
+    created_at: user.created_at || user.createdAt || now,
     updatedAt: user.updatedAt || user.updated_at || now,
+    updated_at: user.updated_at || user.updatedAt || now,
+    lastLoginAt: user.lastLoginAt || user.last_login_at || "",
+    last_login_at: user.last_login_at || user.lastLoginAt || "",
   };
 }
 
 function sanitizeUser(user = {}) {
   const normalized = normalizeUser(user);
-  const { passwordHash, ...safeUser } = normalized;
+  const { passwordHash, password_hash, ...safeUser } = normalized;
   return safeUser;
 }
 
 function adminEnvConfig() {
   return {
-    username: String(process.env.ADMIN_USERNAME || "").trim(),
-    phone: String(process.env.ADMIN_PHONE || "").trim(),
-    password: String(process.env.ADMIN_PASSWORD || "").trim(),
+    username: String(process.env.INIT_ADMIN_USERNAME || process.env.ADMIN_USERNAME || "").trim(),
+    phone: String(process.env.INIT_ADMIN_PHONE || process.env.ADMIN_PHONE || "").trim(),
+    password: String(process.env.INIT_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || "").trim(),
   };
 }
 
 function ensureInitialSuperAdmin(db = {}) {
   const users = Array.isArray(db.users) ? db.users.map(normalizeUser) : [];
-  if (users.some((user) => user.role === "super_admin")) return { db: { ...db, users }, changed: false };
+  if (users.length > 0) return { db: { ...db, users }, changed: false };
   const admin = adminEnvConfig();
   if (!admin.username || !admin.phone || !admin.password) return { db: { ...db, users }, changed: false };
   const timestamp = nowIso();
   const superAdmin = normalizeUser({
     id: uid("user"),
+    name: admin.username,
     username: admin.username,
     phone: admin.phone,
     email: "",
@@ -387,6 +396,7 @@ function ensureInitialSuperAdmin(db = {}) {
     createdAt: timestamp,
     updatedAt: timestamp,
   });
+  console.log(`[auth] initialized super_admin account: ${admin.username || admin.phone}`);
   return { db: { ...db, users: [superAdmin, ...users] }, changed: true };
 }
 
@@ -539,8 +549,18 @@ function clearSessionCookie(req, res) {
   res.setHeader("Set-Cookie", parts.join("; "));
 }
 
+function bearerTokenFromRequest(req) {
+  const header = String(req.get("authorization") || "");
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : "";
+}
+
+function sessionTokenFromRequest(req) {
+  return bearerTokenFromRequest(req) || parseCookies(req)[SESSION_COOKIE_NAME] || "";
+}
+
 function userFromRequest(req) {
-  const token = parseCookies(req)[SESSION_COOKIE_NAME];
+  const token = sessionTokenFromRequest(req);
   const payload = verifySessionToken(token || "");
   if (!payload) return null;
   const db = readDb();
@@ -561,7 +581,7 @@ function hasAnyRole(user, roles = []) {
 }
 
 function canManageUsers(user) {
-  return hasAnyRole(user, ["super_admin", "admin"]);
+  return hasAnyRole(user, ["super_admin"]);
 }
 
 function canMutateOperations(user) {
@@ -851,66 +871,6 @@ function createApp() {
   app.use(express.json({ limit: "20mb" }));
   app.use("/uploads", express.static(UPLOAD_DIR));
 
-  app.post("/api/auth/register", (req, res) => {
-    const username = String(req.body.username || "").trim();
-    const phone = String(req.body.phone || "").trim();
-    const email = String(req.body.email || "").trim();
-    const password = String(req.body.password || "");
-    const confirmPassword = String(req.body.confirmPassword || req.body.confirm_password || "");
-    if (!username) return fail(res, 400, "用户名必填");
-    if (!phone) return fail(res, 400, "手机号必填");
-    if (!password) return fail(res, 400, "密码必填");
-    if (password !== confirmPassword) return fail(res, 400, "两次输入的密码不一致");
-    if (password.length < 8) return fail(res, 400, "密码至少需要 8 位");
-    const db = readDb();
-    const draft = { username, phone, email };
-    if (userDuplicate(db, draft)) return fail(res, 409, "用户名、手机号或邮箱已存在");
-    const timestamp = nowIso();
-    const user = normalizeUser({
-      id: uid("user"),
-      username,
-      phone,
-      email,
-      passwordHash: bcrypt.hashSync(password, 12),
-      role: "viewer",
-      status: "pending",
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    });
-    db.users = [user, ...db.users];
-    writeDb(db);
-    ok(res, { user: sanitizeUser(user), message: "注册成功，请等待管理员审核通过后使用。" });
-  });
-
-  app.post("/api/auth/login", (req, res) => {
-    const login = String(req.body.login || req.body.username || req.body.phone || "").trim();
-    const password = String(req.body.password || "");
-    if (!getSessionSecret()) return fail(res, 500, "SESSION_SECRET_MISSING", "生产环境未配置 SESSION_SECRET 或 JWT_SECRET。");
-    if (!login || !password) return fail(res, 400, "账号和密码必填");
-    const db = readDb();
-    const user = findUserByLogin(db, login);
-    if (!user || !safeComparePassword(password, user.passwordHash)) return fail(res, 401, "账号或密码错误");
-    if (user.status === "pending") return fail(res, 403, "账号正在审核中，请联系管理员开通权限。");
-    if (user.status === "disabled") return fail(res, 403, "账号已被停用，请联系管理员。");
-    if (user.status !== "active") return fail(res, 403, "账号状态异常，请联系管理员。");
-    const token = createSessionToken(user);
-    setSessionCookie(req, res, token);
-    ok(res, sanitizeUser(user));
-  });
-
-  app.post("/api/auth/logout", (req, res) => {
-    clearSessionCookie(req, res);
-    ok(res, { loggedOut: true });
-  });
-
-  app.get("/api/auth/me", (req, res) => {
-    const user = userFromRequest(req);
-    if (!user) return fail(res, 401, "UNAUTHENTICATED", "请先登录。");
-    ok(res, sanitizeUser(user));
-  });
-
-  app.use("/api", authGate);
-
   app.get("/api/health", (req, res) => {
     const host = req.get("host") || "";
     const portPart = host.includes(":") ? `:${host.split(":").pop()}` : "";
@@ -935,12 +895,126 @@ function createApp() {
     });
   });
 
+  app.post("/api/auth/register", (req, res) => {
+    return fail(res, 403, "REGISTRATION_DISABLED", "普通账号不允许公开注册，请联系超级管理员创建账号。");
+  });
+
+  app.post("/api/auth/login", (req, res) => {
+    const login = String(req.body.login || req.body.username || req.body.phone || "").trim();
+    const password = String(req.body.password || "");
+    if (!getSessionSecret()) return fail(res, 500, "SESSION_SECRET_MISSING", "生产环境未配置 SESSION_SECRET 或 JWT_SECRET。");
+    if (!login || !password) return fail(res, 400, "账号和密码必填");
+    const db = readDb();
+    const user = findUserByLogin(db, login);
+    if (!user || !safeComparePassword(password, user.passwordHash)) return fail(res, 401, "账号或密码错误");
+    if (user.status === "pending") return fail(res, 403, "账号正在审核中，请联系管理员开通权限。");
+    if (user.status === "disabled") return fail(res, 403, "账号已被停用，请联系管理员。");
+    if (user.status !== "active") return fail(res, 403, "账号状态异常，请联系管理员。");
+    const lastLoginAt = nowIso();
+    db.users = db.users.map((item) => String(item.id) === String(user.id)
+      ? normalizeUser({ ...item, lastLoginAt, updatedAt: lastLoginAt })
+      : item);
+    writeDb(db);
+    const loggedInUser = db.users.find((item) => String(item.id) === String(user.id)) || user;
+    const token = createSessionToken(loggedInUser);
+    setSessionCookie(req, res, token);
+    ok(res, { token, user: sanitizeUser(loggedInUser) });
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    clearSessionCookie(req, res);
+    ok(res, { loggedOut: true });
+  });
+
+  app.get("/api/auth/me", (req, res) => {
+    const user = userFromRequest(req);
+    if (!user) return fail(res, 401, "UNAUTHENTICATED", "请先登录。");
+    ok(res, sanitizeUser(user));
+  });
+
+  app.use("/api", authGate);
+
   app.get("/api/users", (req, res) => {
     const status = String(req.query.status || "all");
     const users = readDb().users
       .filter((user) => status === "all" || !status || user.status === status)
       .map(sanitizeUser);
     ok(res, users);
+  });
+
+  app.post("/api/users", (req, res) => {
+    const username = String(req.body.username || "").trim();
+    const phone = String(req.body.phone || "").trim();
+    const name = String(req.body.name || username || phone).trim();
+    const email = String(req.body.email || "").trim();
+    const password = String(req.body.password || "");
+    const role = String(req.body.role || "client").trim();
+    const status = String(req.body.status || "active").trim();
+    if (!username && !phone) return fail(res, 400, "用户名或手机号至少填写一个");
+    if (!password || password.length < 8) return fail(res, 400, "密码至少需要 8 位");
+    if (!USER_ROLES.includes(role)) return fail(res, 400, "账号角色无效");
+    if (!USER_STATUSES.includes(status)) return fail(res, 400, "账号状态无效");
+    const db = readDb();
+    if (userDuplicate(db, { username, phone, email })) return fail(res, 409, "用户名、手机号或邮箱已存在");
+    const timestamp = nowIso();
+    const user = normalizeUser({
+      id: uid("user"),
+      name,
+      username,
+      phone,
+      email,
+      passwordHash: bcrypt.hashSync(password, 12),
+      role,
+      status,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    db.users = [user, ...db.users];
+    writeDb(db);
+    ok(res, sanitizeUser(user));
+  });
+
+  app.put("/api/users/:id", (req, res) => {
+    const db = readDb();
+    const target = db.users.find((user) => String(user.id) === String(req.params.id));
+    if (!target) return fail(res, 404, "账号不存在");
+    const username = req.body.username === undefined ? target.username : String(req.body.username || "").trim();
+    const phone = req.body.phone === undefined ? target.phone : String(req.body.phone || "").trim();
+    const email = req.body.email === undefined ? target.email : String(req.body.email || "").trim();
+    const name = req.body.name === undefined ? target.name : String(req.body.name || "").trim();
+    const role = req.body.role === undefined ? target.role : String(req.body.role || "").trim();
+    const status = req.body.status === undefined ? target.status : String(req.body.status || "").trim();
+    if (!username && !phone) return fail(res, 400, "用户名或手机号至少填写一个");
+    if (!USER_ROLES.includes(role)) return fail(res, 400, "账号角色无效");
+    if (!USER_STATUSES.includes(status)) return fail(res, 400, "账号状态无效");
+    if (target.role === "super_admin" && role !== "super_admin") {
+      const activeSuperAdmins = db.users.filter((user) => user.role === "super_admin" && user.status === "active");
+      if (target.status === "active" && activeSuperAdmins.length <= 1) return fail(res, 400, "至少需要保留一个启用的超级管理员");
+    }
+    if (userDuplicate(db, { username, phone, email }, target.id)) return fail(res, 409, "用户名、手机号或邮箱已存在");
+    const password = String(req.body.password || "");
+    if (req.body.password !== undefined && password.length < 8) return fail(res, 400, "密码至少需要 8 位");
+    const passwordHash = password ? bcrypt.hashSync(password, 12) : target.passwordHash;
+    db.users = db.users.map((user) => String(user.id) === String(target.id)
+      ? normalizeUser({ ...user, name, username, phone, email, role, status, passwordHash, updatedAt: nowIso() })
+      : user);
+    writeDb(db);
+    ok(res, sanitizeUser(db.users.find((user) => String(user.id) === String(target.id))));
+  });
+
+  app.delete("/api/users/:id", (req, res) => {
+    const db = readDb();
+    const target = db.users.find((user) => String(user.id) === String(req.params.id));
+    if (!target) return fail(res, 404, "账号不存在");
+    const activeSuperAdmins = db.users.filter((user) => user.role === "super_admin" && user.status === "active");
+    if (target.role === "super_admin" && target.status === "active" && activeSuperAdmins.length <= 1) {
+      return fail(res, 400, "至少需要保留一个启用的超级管理员");
+    }
+    db.users = db.users.map((user) => String(user.id) === String(target.id)
+      ? normalizeUser({ ...user, status: "disabled", updatedAt: nowIso() })
+      : user);
+    writeDb(db);
+    ok(res, sanitizeUser(db.users.find((user) => String(user.id) === String(target.id))));
   });
 
   app.patch("/api/users/:id/status", (req, res) => {

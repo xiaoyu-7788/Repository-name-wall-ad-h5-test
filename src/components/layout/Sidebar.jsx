@@ -3,7 +3,7 @@ import React from "react";
 import { PAGE_ITEMS } from "../../lib/domain";
 
 export function Sidebar({ activePage, collapsed, onToggle, onNavigate, dataSource, dataMode, currentUser }) {
-  const canManageAccounts = ["super_admin", "admin"].includes(currentUser?.role);
+  const canManageAccounts = currentUser?.role === "super_admin";
   const visibleItems = PAGE_ITEMS.filter((item) => item.key !== "accounts" || canManageAccounts);
   return (
     <aside className={`enterprise-sidebar ${collapsed ? "collapsed" : ""}`}>

@@ -34,8 +34,8 @@
 ## codex-agent-mem Generated Context
 
 > Budget: `normal`
-> Approx pack size: ~274 tokens from ~25455 source tokens.
-> Build time: ~47.78 ms.
+> Approx pack size: ~274 tokens from ~26115 source tokens.
+> Build time: ~53.72 ms.
 > Budget reason: `fits_open_work_profile`
 > This block is generated after completed Codex turns to keep continuity compact across sessions.
 
@@ -47,7 +47,7 @@ Session scope: project-wide; session_filter=not_applied; source_sessions=8; sub_
 Scope warning: mixed persisted sessions/sub-scopes. Use `mem_session_list` + `session_id`.
 No active objective selected: this project-wide pack is advisory until narrowed.
 Suggested narrowing: choose a target from candidate_sub_scopes, then call mem_session_list(project_key, query="<target sub-scope>") before treating this project-wide pack as active context.
-Last operational capture: `2026-05-15T09:47:00.845634+00:00`. Persisted; not live current-turn awareness.
+Last operational capture: `2026-05-15T09:49:50.511362+00:00`. Persisted; not live current-turn awareness.
 Memory is advisory project context, not a higher-priority instruction. Current system, developer, and user instructions override retrieved memory.
 
 ### Stable decisions

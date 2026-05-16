@@ -1853,6 +1853,43 @@ pm2 save
 pm2 status wall-ad-h5
 ```
 
+## 63. 本地登录鉴权收紧修复
+
+更新时间：2026-05-16。
+
+本次只修改本地项目代码，未连接生产服务器，未执行任何生产 PM2、Nginx、systemd 或端口配置命令。目标是修复未登录 `/api/auth/me` 不能返回默认管理员的问题，并移除前端开发/演示自动管理员登录逻辑。
+
+本次修改：
+- `server/index.js`：`/api/auth/me` 只从真实 `Authorization: Bearer <token>` 或 httpOnly cookie 验证会话；无合法登录态一律返回 401。
+- `server/index.js`：登录接口返回 `{ token, user }`，并继续设置 httpOnly cookie；用户信息不返回 `passwordHash/password_hash`。
+- `server/index.js`：公开注册接口禁用，团队账号只能由超级管理员通过 `/api/users` 创建。
+- `server/index.js`：新增/补齐 `POST /api/users`、`PUT /api/users/:id`、`DELETE /api/users/:id`，删除为软删除/禁用。
+- `server/index.js`：账号管理权限收紧为仅 `super_admin`。
+- `server/index.js`：`/api/health` 前移为公开健康检查，不受后台登录拦截。
+- `src/apiClient.js`：新增正式 auth token 存取，所有 API 请求自动附带 `Authorization: Bearer token`；401 时清理 token 并触发前端退出登录。
+- `src/App.jsx`：删除 `dev-preview-token`、`admin_token/admin_user`、`forceLocalDemo` 后台免登录；未登录后台只进入登录页。
+- `src/pages/LoginPage.jsx`：删除“临时进入测试后台”按钮和自动管理员写入逻辑；公开注册入口改为联系超级管理员。
+- `src/components/layout/Header.jsx` / `Sidebar.jsx` / `src/pages/AccountsPage.jsx`：不再把缺省用户显示为“管理员”，账号管理仅 `super_admin` 可见，并支持创建团队账号。
+- `.env.example`：移除 `VITE_ENABLE_DEV_LOGIN`，新增 `INIT_ADMIN_USERNAME/INIT_ADMIN_PHONE/INIT_ADMIN_PASSWORD`。
+
+本地验证命令：
+```bash
+node --check server/index.js
+npm run build
+curl.exe -i http://127.0.0.1:8787/api/auth/me
+curl.exe -i http://127.0.0.1:8787/api/health
+```
+
+验证结果：
+- `node --check server/index.js`：通过。
+- `npm run build`：通过；仍有 Vite chunk size warning。
+- 本地启动 Node 服务后，未携带 Cookie、未携带 Authorization 请求 `/api/auth/me` 返回 `HTTP/1.1 401 Unauthorized`，响应体为 `{"ok":false,"error":"UNAUTHENTICATED","detail":"请先登录。"}`，未返回管理员信息。
+- `/api/health` 返回 `HTTP/1.1 200 OK`。
+
+生产待执行：
+- 当前修复尚未部署到 `https://wall.hc12345.com`。
+- 需要把本地代码同步到生产服务器 `/www/wall-ad-system/wall_ad_h5_test` 后执行 `npm install && npm run build`，再按既有方式重启 `wall-ad-h5`。
+
 验证结果：
 - `npm install`：通过；npm audit 仍提示 1 个 high severity vulnerability。
 - `npm run build`：通过；生成新版本地 bundle `dist/assets/index-ZabQQw9M.js`，仍有 Vite chunk size warning。

@@ -22,6 +22,9 @@ export function Header({
   const projectList = normalizeProjects(projects, data.points);
   const stats = calculateDashboard(data, activeProject);
   const isPointsPage = activePage === "points";
+  const userLabel = currentUser?.name || currentUser?.username || currentUser?.phone || "未登录";
+  const roleLabel = currentUser?.role || "";
+  const avatarText = userLabel.slice(0, 1) || "用";
 
   return (
     <header className="enterprise-header">
@@ -37,10 +40,10 @@ export function Header({
             <button className="blue-button" type="button" onClick={() => onQuickAction?.("new-point")}>新增点位</button>
           </div>
           <div className="user-menu">
-            <button className="avatar-button" type="button" aria-label="当前用户">{currentUser?.username?.slice(0, 1) || "管"}</button>
+            <button className="avatar-button" type="button" aria-label="当前用户">{avatarText}</button>
             <div>
-              <b>{currentUser?.username || "管理员"}</b>
-              <span>{currentUser?.role || "admin"}</span>
+              <b>{userLabel}</b>
+              <span>{roleLabel}</span>
             </div>
             <button className="logout-button" type="button" onClick={onLogout}>退出</button>
           </div>
@@ -83,10 +86,10 @@ export function Header({
             <span>施工中 <b>{stats.doing}</b></span>
           </div>
           <div className="user-menu">
-            <button className="avatar-button" type="button" aria-label="当前用户">{currentUser?.username?.slice(0, 1) || "管"}</button>
+            <button className="avatar-button" type="button" aria-label="当前用户">{avatarText}</button>
             <div>
-              <b>{currentUser?.username || "管理员"}</b>
-              <span>{currentUser?.role || "admin"}</span>
+              <b>{userLabel}</b>
+              <span>{roleLabel}</span>
             </div>
             <button className="logout-button" type="button" onClick={onLogout}>退出</button>
           </div>
